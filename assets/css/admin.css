@@ -1,0 +1,622 @@
+/**
+ * WP Versions Themes & Plugins - Admin Styles
+ * 
+ * @package WP_Versions_Themes_Plugins
+ * @since 1.2.0
+ */
+
+/* ==========================================================================
+   Variables CSS
+   ========================================================================== */
+:root {
+    --wpvtp-primary: #0073aa;
+    --wpvtp-secondary: #005177;
+    --wpvtp-success: #46b450;
+    --wpvtp-warning: #ffb900;
+    --wpvtp-error: #dc3232;
+    --wpvtp-info: #00a0d2;
+    --wpvtp-light-gray: #f6f7f7;
+    --wpvtp-border: #ddd;
+    --wpvtp-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    --wpvtp-radius: 4px;
+    --wpvtp-transition: all 0.3s ease;
+}
+
+/* ==========================================================================
+   Layout Principal
+   ========================================================================== */
+.wpvtp-admin {
+    margin: 20px 0;
+}
+
+.wpvtp-admin .nav-tab-wrapper {
+    margin-bottom: 20px;
+    border-bottom: 1px solid var(--wpvtp-border);
+}
+
+.wpvtp-admin .nav-tab {
+    position: relative;
+    transition: var(--wpvtp-transition);
+}
+
+.wpvtp-admin .nav-tab:hover {
+    background-color: var(--wpvtp-light-gray);
+}
+
+.wpvtp-admin .nav-tab-active::after {
+    content: '';
+    position: absolute;
+    bottom: -1px;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background-color: var(--wpvtp-primary);
+}
+
+/* ==========================================================================
+   Dashboard
+   ========================================================================== */
+.wpvtp-dashboard {
+    max-width: 1200px;
+}
+
+/* Estadísticas */
+.wpvtp-stats {
+    display: flex;
+    gap: 20px;
+    margin-bottom: 30px;
+    flex-wrap: wrap;
+}
+
+.wpvtp-stat-box {
+    background: white;
+    border: 1px solid var(--wpvtp-border);
+    border-radius: var(--wpvtp-radius);
+    padding: 20px;
+    text-align: center;
+    flex: 1;
+    min-width: 150px;
+    box-shadow: var(--wpvtp-shadow);
+    transition: var(--wpvtp-transition);
+}
+
+.wpvtp-stat-box:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+}
+
+.wpvtp-stat-box h3 {
+    font-size: 32px;
+    font-weight: bold;
+    margin: 0 0 5px 0;
+    color: var(--wpvtp-primary);
+}
+
+.wpvtp-stat-box p {
+    margin: 0;
+    color: #666;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Estado de GitHub */
+.wpvtp-github-status {
+    background: white;
+    border: 1px solid var(--wpvtp-border);
+    border-radius: var(--wpvtp-radius);
+    padding: 20px;
+    margin-bottom: 30px;
+    box-shadow: var(--wpvtp-shadow);
+}
+
+.wpvtp-github-status h2 {
+    margin-top: 0;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--wpvtp-border);
+}
+
+.wpvtp-github-status .notice {
+    margin: 15px 0;
+}
+
+/* Repositorios instalados */
+.wpvtp-installed-repos {
+    background: white;
+    border: 1px solid var(--wpvtp-border);
+    border-radius: var(--wpvtp-radius);
+    padding: 20px;
+    box-shadow: var(--wpvtp-shadow);
+}
+
+.wpvtp-installed-repos h2 {
+    margin-top: 0;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--wpvtp-border);
+}
+
+.wpvtp-installed-repos .wp-list-table {
+    margin-top: 15px;
+}
+
+.wpvtp-installed-repos .wp-list-table td {
+    vertical-align: middle;
+}
+
+.wpvtp-installed-repos .wp-list-table td small {
+    color: #666;
+    display: block;
+    margin-top: 5px;
+}
+
+/* ==========================================================================
+   Badges y Estados
+   ========================================================================== */
+.wpvtp-badge {
+    display: inline-block;
+    padding: 4px 8px;
+    font-size: 11px;
+    font-weight: bold;
+    text-transform: uppercase;
+    border-radius: var(--wpvtp-radius);
+    letter-spacing: 0.5px;
+}
+
+.wpvtp-badge-theme {
+    background-color: var(--wpvtp-info);
+    color: white;
+}
+
+.wpvtp-badge-plugin {
+    background-color: var(--wpvtp-success);
+    color: white;
+}
+
+.wpvtp-status-success {
+    color: var(--wpvtp-success);
+    font-weight: 600;
+}
+
+.wpvtp-status-warning {
+    color: var(--wpvtp-warning);
+    font-weight: 600;
+}
+
+.wpvtp-status-error {
+    color: var(--wpvtp-error);
+    font-weight: 600;
+}
+
+/* ==========================================================================
+   Wizard de Instalación
+   ========================================================================== */
+.wpvtp-install-wizard {
+    background: white;
+    border: 1px solid var(--wpvtp-border);
+    border-radius: var(--wpvtp-radius);
+    padding: 30px;
+    max-width: 800px;
+    box-shadow: var(--wpvtp-shadow);
+}
+
+.wpvtp-step {
+    margin-bottom: 30px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--wpvtp-border);
+    transition: var(--wpvtp-transition);
+}
+
+.wpvtp-step:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+}
+
+.wpvtp-step.wpvtp-step-completed {
+    opacity: 0.7;
+}
+
+.wpvtp-step h3 {
+    color: var(--wpvtp-primary);
+    margin-bottom: 15px;
+    display: flex;
+    align-items: center;
+}
+
+.wpvtp-step h3::before {
+    content: '';
+    display: inline-block;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background-color: var(--wpvtp-border);
+    margin-right: 10px;
+    position: relative;
+}
+
+.wpvtp-step.wpvtp-step-active h3::before {
+    background-color: var(--wpvtp-primary);
+}
+
+.wpvtp-step.wpvtp-step-completed h3::before {
+    background-color: var(--wpvtp-success);
+}
+
+.wpvtp-step.wpvtp-step-completed h3::after {
+    content: '✓';
+    position: absolute;
+    color: white;
+    font-size: 12px;
+    font-weight: bold;
+    margin-left: -17px;
+    margin-top: 1px;
+}
+
+.wpvtp-step select {
+    width: 100%;
+    max-width: 400px;
+    padding: 8px 12px;
+    border: 1px solid var(--wpvtp-border);
+    border-radius: var(--wpvtp-radius);
+    font-size: 14px;
+    transition: var(--wpvtp-transition);
+}
+
+.wpvtp-step select:focus {
+    border-color: var(--wpvtp-primary);
+    box-shadow: 0 0 0 1px var(--wpvtp-primary);
+    outline: none;
+}
+
+#wpvtp-repo-info {
+    background: var(--wpvtp-light-gray);
+    border: 1px solid var(--wpvtp-border);
+    border-radius: var(--wpvtp-radius);
+    padding: 15px;
+    margin-top: 15px;
+}
+
+#wpvtp-repo-info p {
+    margin: 5px 0;
+}
+
+#wpvtp-install-summary {
+    background: var(--wpvtp-light-gray);
+    border: 1px solid var(--wpvtp-border);
+    border-radius: var(--wpvtp-radius);
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+#wpvtp-install-summary h4 {
+    margin-top: 0;
+    color: var(--wpvtp-primary);
+}
+
+#wpvtp-install-results {
+    margin-top: 30px;
+    padding: 20px;
+    border-radius: var(--wpvtp-radius);
+}
+
+#wpvtp-install-results.success {
+    background-color: #d4edda;
+    border: 1px solid #c3e6cb;
+    color: #155724;
+}
+
+#wpvtp-install-results.error {
+    background-color: #f8d7da;
+    border: 1px solid #f5c6cb;
+    color: #721c24;
+}
+
+/* ==========================================================================
+   Configuración
+   ========================================================================== */
+.wpvtp-settings {
+    background: white;
+    border: 1px solid var(--wpvtp-border);
+    border-radius: var(--wpvtp-radius);
+    padding: 30px;
+    max-width: 800px;
+    box-shadow: var(--wpvtp-shadow);
+}
+
+.wpvtp-settings .form-table th {
+    width: 200px;
+    padding-left: 0;
+}
+
+.wpvtp-settings .form-table input[type="password"] {
+    width: 300px;
+}
+
+#wpvtp-token-validation {
+    margin-top: 10px;
+}
+
+#wpvtp-token-validation.success {
+    color: var(--wpvtp-success);
+    font-weight: 600;
+}
+
+#wpvtp-token-validation.error {
+    color: var(--wpvtp-error);
+    font-weight: 600;
+}
+
+/* ==========================================================================
+   Botones personalizados
+   ========================================================================== */
+.wpvtp-admin .button-large {
+    padding: 12px 24px;
+    height: auto;
+    font-size: 16px;
+}
+
+.wpvtp-admin .button.loading {
+    position: relative;
+    color: transparent;
+}
+
+.wpvtp-admin .button.loading::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 16px;
+    height: 16px;
+    margin: -8px 0 0 -8px;
+    border: 2px solid transparent;
+    border-top: 2px solid currentColor;
+    border-radius: 50%;
+    animation: wpvtp-spin 1s linear infinite;
+}
+
+@keyframes wpvtp-spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* ==========================================================================
+   Mensajes y Notificaciones
+   ========================================================================== */
+.wpvtp-admin .notice {
+    border-left: 4px solid var(--wpvtp-info);
+    padding: 12px;
+    margin: 15px 0;
+}
+
+.wpvtp-admin .notice.notice-success {
+    border-left-color: var(--wpvtp-success);
+}
+
+.wpvtp-admin .notice.notice-warning {
+    border-left-color: var(--wpvtp-warning);
+}
+
+.wpvtp-admin .notice.notice-error {
+    border-left-color: var(--wpvtp-error);
+}
+
+.wpvtp-admin .notice p {
+    margin: 5px 0;
+}
+
+/* ==========================================================================
+   Loading States
+   ========================================================================== */
+.wpvtp-loading {
+    position: relative;
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+.wpvtp-loading::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 32px;
+    height: 32px;
+    margin: -16px 0 0 -16px;
+    border: 3px solid var(--wpvtp-border);
+    border-top: 3px solid var(--wpvtp-primary);
+    border-radius: 50%;
+    animation: wpvtp-spin 1s linear infinite;
+}
+
+/* ==========================================================================
+   Modales
+   ========================================================================== */
+.wpvtp-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0,0,0,0.5);
+    z-index: 100000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    visibility: hidden;
+    transition: var(--wpvtp-transition);
+}
+
+.wpvtp-modal.wpvtp-modal-visible {
+    opacity: 1;
+    visibility: visible;
+}
+
+.wpvtp-modal-content {
+    background: white;
+    border-radius: var(--wpvtp-radius);
+    padding: 30px;
+    max-width: 500px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    transform: scale(0.9);
+    transition: var(--wpvtp-transition);
+}
+
+.wpvtp-modal.wpvtp-modal-visible .wpvtp-modal-content {
+    transform: scale(1);
+}
+
+.wpvtp-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid var(--wpvtp-border);
+}
+
+.wpvtp-modal-header h3 {
+    margin: 0;
+    color: var(--wpvtp-primary);
+}
+
+.wpvtp-modal-close {
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    color: #666;
+    padding: 0;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: var(--wpvtp-transition);
+}
+
+.wpvtp-modal-close:hover {
+    background-color: var(--wpvtp-light-gray);
+}
+
+/* ==========================================================================
+   Responsive Design
+   ========================================================================== */
+@media screen and (max-width: 782px) {
+    .wpvtp-stats {
+        flex-direction: column;
+    }
+    
+    .wpvtp-stat-box {
+        min-width: auto;
+    }
+    
+    .wpvtp-admin .wp-list-table {
+        font-size: 12px;
+    }
+    
+    .wpvtp-admin .wp-list-table td {
+        padding: 8px 5px;
+    }
+    
+    .wpvtp-install-wizard,
+    .wpvtp-settings {
+        padding: 20px;
+        margin: 0 10px;
+    }
+    
+    .wpvtp-step select {
+        max-width: 100%;
+    }
+    
+    .wpvtp-settings .form-table input[type="password"] {
+        width: 100%;
+        max-width: 300px;
+    }
+}
+
+@media screen and (max-width: 600px) {
+    .wpvtp-admin .nav-tab-wrapper {
+        border: none;
+    }
+    
+    .wpvtp-admin .nav-tab {
+        display: block;
+        margin: 0 0 -1px 0;
+        border-radius: 0;
+    }
+    
+    .wpvtp-modal-content {
+        padding: 20px;
+        margin: 20px;
+    }
+    
+    .wpvtp-admin .button-large {
+        width: 100%;
+        text-align: center;
+    }
+}
+
+/* ==========================================================================
+   Accessibility
+   ========================================================================== */
+.wpvtp-admin *:focus {
+    outline: 2px solid var(--wpvtp-primary);
+    outline-offset: 2px;
+}
+
+.wpvtp-admin .button:focus,
+.wpvtp-admin select:focus,
+.wpvtp-admin input:focus {
+    box-shadow: 0 0 0 1px var(--wpvtp-primary);
+}
+
+/* Screen reader text */
+.wpvtp-sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0,0,0,0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* ==========================================================================
+   Animaciones y transiciones adicionales
+   ========================================================================== */
+.wpvtp-fade-in {
+    animation: wpvtp-fadeIn 0.5s ease-in-out;
+}
+
+@keyframes wpvtp-fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.wpvtp-slide-down {
+    animation: wpvtp-slideDown 0.3s ease-out;
+}
+
+@keyframes wpvtp-slideDown {
+    from { max-height: 0; opacity: 0; }
+    to { max-height: 300px; opacity: 1; }
+}
+
+/* ==========================================================================
+   Utilidades
+   ========================================================================== */
+.wpvtp-text-center { text-align: center; }
+.wpvtp-text-right { text-align: right; }
+.wpvtp-mb-0 { margin-bottom: 0; }
+.wpvtp-mb-10 { margin-bottom: 10px; }
+.wpvtp-mb-20 { margin-bottom: 20px; }
+.wpvtp-mt-0 { margin-top: 0; }
+.wpvtp-mt-10 { margin-top: 10px; }
+.wpvtp-mt-20 { margin-top: 20px; }
+.wpvtp-hidden { display: none; }
+.wpvtp-visible { display: block; }
