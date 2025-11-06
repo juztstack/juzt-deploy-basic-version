@@ -82,6 +82,7 @@
         showStep("repository");
       } else {
         hideStep("repository");
+        hideStep("type");
         hideStep("branch");
         hideStep("custom-name");
         hideStep("confirm");
@@ -100,14 +101,34 @@
         // Mostrar información del repositorio
         showRepositoryInfo(repo);
 
+        // Mostrar paso de tipo (nuevo)
+        showStep("type");
+        $("#wpvtp-repo-type").prop("disabled", false);
+      } else {
+        hideStep("type");
+        hideStep("branch");
+        hideStep("custom-name");
+        hideStep("confirm");
+        $("#wpvtp-repo-info").hide();
+      }
+    });
+
+    // Cambio de tipo (NUEVO)
+    $("#wpvtp-repo-type").on("change", function () {
+      const type = $(this).val();
+      if (type && selectedRepo) {
+        debugLog('Tipo seleccionado:', type);
+        
+        // Guardar el tipo en el objeto selectedRepo
+        selectedRepo.detected_type = type;
+        
         // Cargar ramas
-        loadBranches(repo.owner.login, repo.name);
+        loadBranches(selectedRepo.owner.login, selectedRepo.name);
         showStep("branch");
       } else {
         hideStep("branch");
         hideStep("custom-name");
         hideStep("confirm");
-        $("#wpvtp-repo-info").hide();
       }
     });
 
@@ -436,16 +457,17 @@
       (repo.description || "Sin descripción") + privacyBadge + languageBadge
     );
 
-    // Detectar tipo automáticamente
-    detectRepoType(repo);
-
     $("#wpvtp-repo-info").show().addClass("wpvtp-fade-in");
   }
 
   /**
    * Detectar tipo de repositorio (theme/plugin)
+   * DEPRECATED: Ahora se hace de forma manual por el usuario
    */
   function detectRepoType(repo) {
+    // Esta función ya no se usa
+    // El tipo ahora se selecciona manualmente en el paso 3 del wizard
+    /*
     let detectedType = "desconocido";
     const repoName = repo.name.toLowerCase();
 
@@ -464,6 +486,7 @@
                     : "❓ No detectado";
 
     $("#repo-type").html(typeLabel);
+    */
   }
 
   /**
@@ -803,6 +826,7 @@
 
   function hideAllStepsExceptFirst() {
     hideStep("repository");
+    hideStep("type");
     hideStep("branch");
     hideStep("custom-name");
     hideStep("confirm");

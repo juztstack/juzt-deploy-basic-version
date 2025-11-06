@@ -155,7 +155,7 @@ class WPVTP_Repo_Manager
     /**
      * Clonar repositorio con nombre personalizado
      */
-    public function clone_repository($repo_url, $branch, $type, $repo_name, $custom_name = '')
+    public function clone_repository($repo_url, $branch, $type, $repo_name, $custom_name = '', $access_token = '')
     {
         if (!$this->is_git_available()) {
             return array(
@@ -182,6 +182,9 @@ class WPVTP_Repo_Manager
                 'error' => sprintf(__('El directorio %s ya existe', 'wp-versions-themes-plugins'), $folder_handle)
             );
         }
+		
+		// ✅ NUEVO: Agregar token a la URL para repos privados
+        $clone_url = $this->add_token_to_url($repo_url, $access_token);
 
         // Ejecutar git clone
         $output = array();
@@ -190,9 +193,11 @@ class WPVTP_Repo_Manager
         $command = sprintf(
             'git clone -b %s %s %s 2>&1',
             escapeshellarg($branch),
-            escapeshellarg($repo_url),
+            escapeshellarg($clone_url),
             escapeshellarg($destination)
         );
+        
+        //var_dump($command);
 
         exec($command, $output, $return_var);
 
@@ -214,6 +219,11 @@ class WPVTP_Repo_Manager
                 'success' => false,
                 'error' => __('El repositorio se clonó pero no contiene información de Git', 'wp-versions-themes-plugins')
             );
+        }
+		
+		// ✅ NUEVO: Configurar credenciales para futuras operaciones git
+        if (!empty($access_token)) {
+            $this->configure_git_credentials($destination, $access_token);
         }
 
         // Si es tema, actualizar nombre en style.css
@@ -241,7 +251,7 @@ class WPVTP_Repo_Manager
     /**
      * Actualizar repositorio (git pull)
      */
-    public function update_repository($identifier)
+    public function update_repository($identifier, $access_token = '')
     {
         // Resolver el path real desde el identificador
         $repo_info = $this->get_repo_by_identifier($identifier);
@@ -260,6 +270,11 @@ class WPVTP_Repo_Manager
                 'success' => false,
                 'error' => __('El directorio no contiene un repositorio Git válido', 'wp-versions-themes-plugins')
             );
+        }
+		
+		// ✅ NUEVO: Actualizar credenciales si hay token
+        if (!empty($access_token)) {
+            $this->configure_git_credentials($local_path, $access_token);
         }
 
         $output = array();
@@ -781,5 +796,69 @@ class WPVTP_Repo_Manager
         }
 
         return ['success' => true, 'message' => 'Cambios registrados y empujados exitosamente.'];
+    }
+	
+	/**
+     * NUEVO: Agregar token a URL de GitHub para repos privados
+     */
+    private function add_token_to_url($repo_url, $access_token)
+    {
+        if (empty($access_token)) {
+            return $repo_url;
+        }
+
+        // Reemplazar https://github.com/ con https://TOKEN@github.com/
+        $authenticated_url = str_replace(
+            'https://github.com/',
+            'https://' . $access_token . '@github.com/',
+            $repo_url
+        );
+
+        return $authenticated_url;
+    }
+
+    /**
+     * NUEVO: Configurar Git credential helper para el repositorio
+     */
+    private function configure_git_credentials($repo_path, $access_token)
+    {
+        if (empty($access_token) || !is_dir($repo_path)) {
+            return;
+        }
+
+        $old_cwd = getcwd();
+        chdir($repo_path);
+
+        // Configurar credential helper para almacenar el token
+        exec('git config credential.helper store');
+        
+        // Configurar el token en el remote origin
+        $remote_url = $this->get_remote_url($repo_path);
+        if ($remote_url) {
+            $authenticated_url = $this->add_token_to_url($remote_url, $access_token);
+            exec('git remote set-url origin ' . escapeshellarg($authenticated_url));
+        }
+
+        chdir($old_cwd);
+    }
+
+    /**
+     * NUEVO: Obtener URL remota del repositorio
+     */
+    private function get_remote_url($repo_path)
+    {
+        if (!is_dir($repo_path . '/.git')) {
+            return false;
+        }
+
+        $old_cwd = getcwd();
+        chdir($repo_path);
+
+        $output = array();
+        exec('git remote get-url origin 2>&1', $output);
+
+        chdir($old_cwd);
+
+        return isset($output[0]) ? trim($output[0]) : false;
     }
 }

@@ -147,7 +147,7 @@ class WPVTP_Admin_Interface
         // Tabla de repositorios
         if (!empty($repos)) {
             echo '<h3>Repositorios Instalados</h3>';
-            echo '<table class="wp-list-table widefat fixed striped">';
+            echo '<table class="fixed wp-list-table widefat striped">';
             echo '<thead><tr>';
             echo '<th>Nombre</th>';
             echo '<th>Tipo</th>';
@@ -233,28 +233,39 @@ class WPVTP_Admin_Interface
         echo '<div id="wpvtp-repo-info" style="display: none; margin-top: 15px; padding: 15px; background: #f8f9fa; border-radius: 5px;">';
         echo '<h4>Información del Repositorio</h4>';
         echo '<p><strong>Descripción:</strong> <span id="repo-description"></span></p>';
-        echo '<p><strong>Tipo detectado:</strong> <span id="repo-type"></span></p>';
         echo '</div>';
         echo '</div>';
 
-        // Paso 3: Rama
+        // Paso 3: Tipo de Repositorio (NUEVO - MANUAL)
+        echo '<div class="wpvtp-form-step" id="step-type" style="display: none; margin-top: 30px;">';
+        echo '<h3>3. Selecciona el Tipo</h3>';
+        echo '<p style="color: #666; margin-bottom: 15px;">¿Qué tipo de repositorio es?</p>';
+        echo '<select id="wpvtp-repo-type" style="width: 100%; max-width: 400px; padding: 8px;" disabled>';
+        echo '<option value="">Selecciona el tipo...</option>';
+        echo '<option value="theme">🎨 Tema de WordPress</option>';
+        echo '<option value="plugin">🔌 Plugin de WordPress</option>';
+        echo '</select>';
+        echo '<p class="description" style="margin-top: 8px; color: #666; font-size: 13px;">Selecciona si este repositorio contiene un tema o un plugin de WordPress.</p>';
+        echo '</div>';
+
+        // Paso 4: Rama
         echo '<div class="wpvtp-form-step" id="step-branch" style="display: none; margin-top: 30px;">';
-        echo '<h3>3. Selecciona Rama</h3>';
+        echo '<h3>4. Selecciona Rama</h3>';
         echo '<select id="wpvtp-branch" style="width: 100%; max-width: 400px; padding: 8px;" disabled>';
-        echo '<option value="">Primero selecciona un repositorio</option>';
+        echo '<option value="">Primero selecciona el tipo</option>';
         echo '</select>';
         echo '</div>';
 
-        // Paso 4: Nombre personalizado (NUEVO)
+        // Paso 5: Nombre personalizado
         echo '<div class="wpvtp-form-step" id="step-custom-name" style="display: none; margin-top: 30px;">';
-        echo '<h3>4. Nombre Personalizado (Opcional)</h3>';
+        echo '<h3>5. Nombre Personalizado (Opcional)</h3>';
         echo '<input type="text" id="wpvtp-custom-name" style="width: 100%; max-width: 400px; padding: 8px;" placeholder="Déjalo vacío para usar el nombre del repositorio">';
         echo '<p class="description" style="margin-top: 8px; color: #666; font-size: 13px;">Para temas: Este nombre aparecerá como "Theme Name" en el style.css. Útil para diferenciar múltiples versiones.</p>';
         echo '</div>';
 
-        // Paso 5: Confirmación
+        // Paso 6: Confirmación
         echo '<div class="wpvtp-form-step" id="step-confirm" style="display: none; margin-top: 30px;">';
-        echo '<h3>5. Confirmar Instalación</h3>';
+        echo '<h3>6. Confirmar Instalación</h3>';
         echo '<div id="wpvtp-install-summary"></div>';
         echo '<button type="submit" class="button button-primary button-large" style="margin-top: 20px;">Instalar Repositorio</button>';
         echo '</div>';

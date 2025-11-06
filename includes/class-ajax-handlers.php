@@ -239,8 +239,10 @@ class WPVTP_AJAX_Handlers
         $repo_type = sanitize_text_field($_POST['repo_type']);
         $repo_name = sanitize_text_field($_POST['repo_name']);
         $custom_name = isset($_POST['custom_name']) ? sanitize_text_field($_POST['custom_name']) : '';
+		 // ✅ CAMBIO PRINCIPAL: Obtener el access token para repos privados
+        $access_token = get_option('wpvtp_oauth_token');
         
-        $result = $repo_manager->clone_repository($repo_url, $branch, $repo_type, $repo_name, $custom_name);
+        $result = $repo_manager->clone_repository($repo_url, $branch, $repo_type, $repo_name, $custom_name, $access_token);
         
         wp_send_json($result);
     }
@@ -257,7 +259,10 @@ class WPVTP_AJAX_Handlers
         
         $local_path = sanitize_text_field($_POST['local_path']);
         
-        $result = $repo_manager->update_repository($local_path);
+                // ✅ CAMBIO PRINCIPAL: Obtener el access token para repos privados
+        $access_token = get_option('wpvtp_oauth_token');
+        
+        $result = $repo_manager->update_repository($local_path, $access_token);
         
         wp_send_json($result);
     }
