@@ -1,7 +1,7 @@
 /**
  * WP Versions Themes & Plugins - Admin JavaScript
  *
- * Actualizado para soporte de GitHub Apps con Installation Tokens
+ * Updated for GitHub Apps with Installation Tokens support
  *
  * @package WP_Versions_Plugins_Themes
  * @since 1.5.0
@@ -10,17 +10,17 @@
 (function ($) {
   "use strict";
 
-  // Variables globales
+  // Global variables
   let currentOrganizations = [];
   let currentRepositories = [];
   let currentBranches = [];
   let selectedRepo = null;
 
-  // DEBUG MODE - Cambiar a false en producción
+  // DEBUG MODE - Change to false in production
   const DEBUG = typeof wpvtp_ajax !== 'undefined' && wpvtp_ajax.debug === '1';
 
   /**
-   * Logging condicional para debug
+   * Conditional logging for debug
    */
   function debugLog(message, data = null) {
     if (DEBUG) {
@@ -29,21 +29,21 @@
   }
 
   /**
-   * Inicialización cuando el documento está listo
+   * Initialization when the document is ready
    */
   $(document).ready(function () {
-    debugLog('Inicializando plugin...');
+    debugLog('Initializing plugin...');
     
     initializeWizard();
     initializeActions();
     initializeTokenValidation();
 
-    // Cargar organizaciones automáticamente si estamos en la página de instalación
+    // Load organizations automatically if we are on the installation page
     if ($("#wpvtp-organization").length) {
       loadOrganizations();
     }
 
-    // Manejar formulario de OAuth (si existe)
+    // Handle OAuth form (if it exists)
     $("#wpvtp-oauth-form").on("submit", function (e) {
       const clientId = $("#client_id").val().trim();
       const clientSecret = $("#client_secret").val().trim();
@@ -51,7 +51,7 @@
       if (!clientId || !clientSecret) {
         e.preventDefault();
         showNotification(
-          "❌ Client ID y Client Secret son requeridos",
+          "❌ Client ID and Client Secret are required",
           "error"
         );
         return false;
@@ -59,23 +59,23 @@
 
       if (clientSecret === "••••••••••••••••••••") {
         e.preventDefault();
-        showNotification("❌ Debes ingresar un Client Secret válido", "error");
+        showNotification("❌ You must enter a valid Client Secret", "error");
         return false;
       }
     });
   });
 
   /**
-   * Inicializar wizard de instalación
+   * Initialize installation wizard
    */
   function initializeWizard() {
-    // Cambio de organización
+    // Organization change
     $("#wpvtp-organization").on("change", function () {
       const selectedOption = $(this).find('option:selected');
       const owner = selectedOption.val();
       const type = selectedOption.data('type');
 
-      debugLog('Organización seleccionada:', { owner, type });
+      debugLog('Selected Organization:', { owner, type });
 
       if (owner) {
         loadRepositories(owner, type);
@@ -89,19 +89,19 @@
       }
     });
 
-    // Cambio de repositorio
+    // Repository change
     $("#wpvtp-repository").on("change", function () {
       const repoData = $(this).val();
       if (repoData) {
         const repo = JSON.parse(repoData);
         selectedRepo = repo;
 
-        debugLog('Repositorio seleccionado:', repo);
+        debugLog('Selected Repository:', repo);
 
-        // Mostrar información del repositorio
+        // Show repository information
         showRepositoryInfo(repo);
 
-        // Mostrar paso de tipo (nuevo)
+        // Show type step (new)
         showStep("type");
         $("#wpvtp-repo-type").prop("disabled", false);
       } else {
@@ -113,16 +113,16 @@
       }
     });
 
-    // Cambio de tipo (NUEVO)
+    // Type change (NEW)
     $("#wpvtp-repo-type").on("change", function () {
       const type = $(this).val();
       if (type && selectedRepo) {
-        debugLog('Tipo seleccionado:', type);
+        debugLog('Selected Type:', type);
         
-        // Guardar el tipo en el objeto selectedRepo
+        // Save the type in the selectedRepo object
         selectedRepo.detected_type = type;
         
-        // Cargar ramas
+        // Load branches
         loadBranches(selectedRepo.owner.login, selectedRepo.name);
         showStep("branch");
       } else {
@@ -132,16 +132,16 @@
       }
     });
 
-    // Cambio de rama
+    // Branch change
     $("#wpvtp-branch").on("change", function () {
       const branch = $(this).val();
       if (branch && selectedRepo) {
-        debugLog('Rama seleccionada:', branch);
+        debugLog('Selected Branch:', branch);
         
-        // Mostrar paso de nombre personalizado
+        // Show custom name step
         showStep("custom-name");
         
-        // Sugerir nombre por defecto basado en repo y rama
+        // Suggest default name based on repo and branch
         suggestCustomName();
         
         showInstallSummary();
@@ -152,14 +152,14 @@
       }
     });
 
-    // Cambio en nombre personalizado - actualizar resumen
+    // Custom name change - update summary
     $("#wpvtp-custom-name").on("input", function () {
       if (selectedRepo && $("#wpvtp-branch").val()) {
         showInstallSummary();
       }
     });
 
-    // Envío del formulario de instalación
+    // Submission of the installation form
     $("#wpvtp-install-form").on("submit", function (e) {
       e.preventDefault();
       installRepository();
@@ -167,7 +167,7 @@
   }
 
   /**
-   * Sugerir nombre personalizado basado en repositorio y rama
+   * Suggest custom name based on repository and branch
    */
   function suggestCustomName() {
     if (!selectedRepo) return;
@@ -175,23 +175,23 @@
     const branch = $("#wpvtp-branch").val();
     const repoName = selectedRepo.name;
     
-    // Solo sugerir si no es la rama principal y es un tema
+    // Only suggest if it's not the main branch and it's a theme
     if (selectedRepo.detected_type === 'theme' && 
         branch && 
         !['main', 'master'].includes(branch)) {
       
       const suggestedName = repoName + ' (' + branch.charAt(0).toUpperCase() + branch.slice(1) + ')';
-      $("#wpvtp-custom-name").attr('placeholder', 'Ej: ' + suggestedName);
+      $("#wpvtp-custom-name").attr('placeholder', 'E.g.: ' + suggestedName);
     } else {
-      $("#wpvtp-custom-name").attr('placeholder', 'Déjalo vacío para usar el nombre del repositorio');
+      $("#wpvtp-custom-name").attr('placeholder', 'Leave empty to use the repository name');
     }
   }
 
   /**
-   * Inicializar acciones de la tabla de repositorios
+   * Initialize repository table actions
    */
   function initializeActions() {
-    // Actualizar repositorio
+    // Update repository
     $(document).on("click", ".wpvtp-update-repo", function (e) {
       e.preventDefault();
       const localPath = $(this).data("path");
@@ -200,7 +200,7 @@
       updateRepository(localPath, button);
     });
 
-    // Cambiar rama
+    // Switch branch
     $(document).on("click", ".wpvtp-switch-branch", function (e) {
       e.preventDefault();
       const localPath = $(this).data("path");
@@ -209,16 +209,16 @@
       showBranchModal(localPath, repoUrl);
     });
 
-    // Eliminar repositorio
+    // Remove repository
     $(document).on("click", ".wpvtp-remove-repo", function (e) {
       e.preventDefault();
       const localPath = $(this).data("path");
       const repoName = $(this).data("name");
 
       showConfirmModal(
-        "Confirmar Eliminación",
-        `¿Estás seguro de que quieres eliminar el repositorio "${repoName}"? Esta acción no se puede deshacer.`,
-        "Eliminar",
+        "Confirm Deletion",
+        `Are you sure you want to delete the repository "${repoName}"? This action cannot be undone.`,
+        "Delete",
         "button-link-delete",
         function () {
           removeRepository(localPath);
@@ -228,7 +228,7 @@
   }
 
   /**
-   * Inicializar validación de token
+   * Initialize token validation
    */
   function initializeTokenValidation() {
     $("#wpvtp-validate-token").on("click", function (e) {
@@ -236,7 +236,7 @@
       const token = $('input[name="github_token"]').val();
 
       if (!token || token === "••••••••••••••••") {
-        showTokenValidation("Por favor ingresa un token válido", "error");
+        showTokenValidation("Please enter a valid token", "error");
         return;
       }
 
@@ -245,18 +245,18 @@
   }
 
   /**
-   * Desconectar de GitHub
+   * Disconnect from GitHub
    */
   window.disconnectGitHub = function() {
     if (
       !confirm(
-        "¿Estás seguro de que quieres desconectar de GitHub? Perderás acceso a los repositorios privados."
+        "Are you sure you want to disconnect from GitHub? You will lose access to private repositories."
       )
     ) {
       return;
     }
 
-    debugLog('Desconectando de GitHub...');
+    debugLog('Disconnecting from GitHub...');
 
     $.post(wpvtp_ajax.ajax_url, {
       action: "wpvtp_disconnect_github",
@@ -268,26 +268,26 @@
           setTimeout(() => location.reload(), 1500);
         } else {
           showNotification(
-            "❌ Error al desconectar: " + response.data.error,
+            "❌ Error while disconnecting: " + response.data.error,
             "error"
           );
         }
       })
       .fail(function () {
-        showNotification("❌ Error de conexión al desconectar", "error");
+        showNotification("❌ Connection error while disconnecting", "error");
       });
   };
 
   /**
-   * Cargar organizaciones desde GitHub
+   * Load organizations from GitHub
    */
   function loadOrganizations() {
     const select = $("#wpvtp-organization");
 
-    debugLog('Cargando organizaciones...');
+    debugLog('Loading organizations...');
 
     select
-      .html('<option value="">Cargando organizaciones...</option>')
+      .html('<option value="">Loading organizations...</option>')
       .prop("disabled", true);
 
     $.post(wpvtp_ajax.ajax_url, {
@@ -295,17 +295,17 @@
       nonce: wpvtp_ajax.nonce,
     })
       .done(function (response) {
-        debugLog('Respuesta de organizaciones:', response);
+        debugLog('Organizations response:', response);
         
         if (response.success) {
           currentOrganizations = response.data;
           populateOrganizationSelect();
         } else {
           select.html(
-            '<option value="">Error al cargar organizaciones</option>'
+            '<option value="">Error loading organizations</option>'
           );
           showNotification(
-            "Error al cargar organizaciones: " + response.data,
+            "Error loading organizations: " + response.data,
             "error"
           );
 
@@ -315,15 +315,15 @@
             response.data.includes("expirada")
           ) {
             showNotification(
-              "❌ Sesión inválida o expirada. Ve a Configuración para reconectar con GitHub.",
+              "❌ Invalid or expired session. Go to Settings to reconnect with GitHub.",
               "error"
             );
           }
         }
       })
       .fail(function () {
-        select.html('<option value="">Error de conexión</option>');
-        showNotification("Error de conexión al cargar organizaciones", "error");
+        select.html('<option value="">Connection error</option>');
+        showNotification("Connection error while loading organizations", "error");
       })
       .always(function () {
         select.prop("disabled", false);
@@ -331,11 +331,11 @@
   }
 
   /**
-   * Poblar select de organizaciones
+   * Populate organization select
    */
   function populateOrganizationSelect() {
     const select = $("#wpvtp-organization");
-    let html = '<option value="">Selecciona una organización o usuario...</option>';
+    let html = '<option value="">Select an organization or user...</option>';
 
     currentOrganizations.forEach(function (org) {
       const type = org.type === 'Organization' ? 'org' : 'user';
@@ -346,19 +346,19 @@
     });
 
     select.html(html);
-    debugLog(`${currentOrganizations.length} organizaciones cargadas`);
+    debugLog(`${currentOrganizations.length} organizations loaded`);
   }
 
   /**
-   * Cargar repositorios de una organización
+   * Load repositories for an organization
    */
   function loadRepositories(owner, type) {
     const select = $("#wpvtp-repository");
 
-    debugLog('Cargando repositorios de:', { owner, type });
+    debugLog('Loading repositories for:', { owner, type });
 
     select
-      .html('<option value="">Cargando repositorios...</option>')
+      .html('<option value="">Loading repositories...</option>')
       .prop("disabled", true);
 
     $.post(wpvtp_ajax.ajax_url, {
@@ -368,28 +368,28 @@
       nonce: wpvtp_ajax.nonce,
     })
       .done(function (response) {
-        debugLog('Respuesta de repositorios:', response);
+        debugLog('Repositories response:', response);
         
         if (response.success) {
           currentRepositories = response.data;
           populateRepositorySelect();
           
-          // Contar repos privados
+          // Count private repos
           const privateCount = currentRepositories.filter(r => r.private).length;
           if (privateCount > 0) {
-            debugLog(`✅ ${privateCount} repositorio(s) privado(s) encontrado(s)`);
+            debugLog(`✅ ${privateCount} private repository(ies) found`);
           }
         } else {
-          select.html('<option value="">Error al cargar repositorios</option>');
+          select.html('<option value="">Error loading repositories</option>');
           showNotification(
-            "Error al cargar repositorios: " + response.data,
+            "Error loading repositories: " + response.data,
             "error"
           );
         }
       })
       .fail(function () {
-        select.html('<option value="">Error de conexión</option>');
-        showNotification("Error de conexión al cargar repositorios", "error");
+        select.html('<option value="">Connection error</option>');
+        showNotification("Connection error while loading repositories", "error");
       })
       .always(function () {
         select.prop("disabled", false);
@@ -397,20 +397,20 @@
   }
 
   /**
-   * Poblar select de repositorios
-   * ACTUALIZADO: Ahora muestra indicador visual para repos privados
+   * Populate repository select
+   * UPDATED: Now shows visual indicator for private repos
    */
   function populateRepositorySelect() {
     const select = $("#wpvtp-repository");
     
     if (currentRepositories.length === 0) {
-      select.html('<option value="">No hay repositorios disponibles</option>');
+      select.html('<option value="">No repositories available</option>');
       return;
     }
 
-    let html = '<option value="">Selecciona un repositorio...</option>';
+    let html = '<option value="">Select a repository...</option>';
 
-    // Ordenar: privados primero, luego por nombre
+    // Sort: private first, then by name
     const sortedRepos = currentRepositories.sort((a, b) => {
       if (a.private === b.private) {
         return a.name.localeCompare(b.name);
@@ -419,7 +419,7 @@
     });
 
     sortedRepos.forEach(function (repo) {
-      // Indicador visual para repos privados
+      // Visual indicator for private repos
       const privacyIcon = repo.private ? '🔒 ' : '🌐 ';
       const repoData = JSON.stringify(repo);
       const description = repo.description ? ' - ' + repo.description.substring(0, 50) : '';
@@ -429,76 +429,47 @@
 
     select.html(html);
     
-    // Mostrar mensaje si hay repos privados
+    // Show message if there are private repos
     const privateCount = currentRepositories.filter(r => r.private).length;
     if (privateCount > 0) {
       showNotification(
-        `✅ ${privateCount} repositorio(s) privado(s) disponible(s)`,
+        `✅ ${privateCount} private repository(ies) available`,
         "success"
       );
     }
     
-    debugLog(`${currentRepositories.length} repositorios cargados (${privateCount} privados)`);
+    debugLog(`${currentRepositories.length} repositories loaded (${privateCount} private)`);
   }
 
   /**
-   * Mostrar información del repositorio seleccionado
+   * Show selected repository information
    */
   function showRepositoryInfo(repo) {
     const privacyBadge = repo.private 
-      ? '<span style="background: #d63638; color: white; padding: 3px 8px; border-radius: 3px; font-size: 11px; margin-left: 8px;">🔒 PRIVADO</span>'
-      : '<span style="background: #00a32a; color: white; padding: 3px 8px; border-radius: 3px; font-size: 11px; margin-left: 8px;">🌐 PÚBLICO</span>';
+      ? '<span style="background: #d63638; color: white; padding: 3px 8px; border-radius: 3px; font-size: 11px; margin-left: 8px;">🔒 PRIVATE</span>'
+      : '<span style="background: #00a32a; color: white; padding: 3px 8px; border-radius: 3px; font-size: 11px; margin-left: 8px;">🌐 PUBLIC</span>';
     
     const languageBadge = repo.language 
       ? `<span style="background: #f0f0f0; padding: 3px 8px; border-radius: 3px; font-size: 11px; margin-left: 8px;">${repo.language}</span>`
       : '';
 
     $("#repo-description").html(
-      (repo.description || "Sin descripción") + privacyBadge + languageBadge
+      (repo.description || "No description") + privacyBadge + languageBadge
     );
 
     $("#wpvtp-repo-info").show().addClass("wpvtp-fade-in");
   }
 
   /**
-   * Detectar tipo de repositorio (theme/plugin)
-   * DEPRECATED: Ahora se hace de forma manual por el usuario
-   */
-  function detectRepoType(repo) {
-    // Esta función ya no se usa
-    // El tipo ahora se selecciona manualmente en el paso 3 del wizard
-    /*
-    let detectedType = "desconocido";
-    const repoName = repo.name.toLowerCase();
-
-    // Detectar por nombre
-    if (repoName.includes("theme") || repoName.includes("tema")) {
-      detectedType = "theme";
-    } else if (repoName.includes("plugin")) {
-      detectedType = "plugin";
-    }
-
-    // Agregar al objeto repo
-    repo.detected_type = detectedType;
-
-    const typeLabel = detectedType === "theme" ? "🎨 Tema de WordPress" 
-                    : detectedType === "plugin" ? "🔌 Plugin de WordPress"
-                    : "❓ No detectado";
-
-    $("#repo-type").html(typeLabel);
-    */
-  }
-
-  /**
-   * Cargar ramas de un repositorio
+   * Load branches for a repository
    */
   function loadBranches(owner, repo) {
     const select = $("#wpvtp-branch");
 
-    debugLog('Cargando ramas de:', { owner, repo });
+    debugLog('Loading branches for:', { owner, repo });
 
     select
-      .html('<option value="">Cargando ramas...</option>')
+      .html('<option value="">Loading branches...</option>')
       .prop("disabled", true);
 
     $.post(wpvtp_ajax.ajax_url, {
@@ -508,19 +479,19 @@
       nonce: wpvtp_ajax.nonce,
     })
       .done(function (response) {
-        debugLog('Respuesta de ramas:', response);
+        debugLog('Branches response:', response);
         
         if (response.success) {
           currentBranches = response.data;
           populateBranchSelect();
         } else {
-          select.html('<option value="">Error al cargar ramas</option>');
-          showNotification("Error al cargar ramas: " + response.data, "error");
+          select.html('<option value="">Error loading branches</option>');
+          showNotification("Error loading branches: " + response.data, "error");
         }
       })
       .fail(function () {
-        select.html('<option value="">Error de conexión</option>');
-        showNotification("Error de conexión al cargar ramas", "error");
+        select.html('<option value="">Connection error</option>');
+        showNotification("Connection error while loading branches", "error");
       })
       .always(function () {
         select.prop("disabled", false);
@@ -528,20 +499,20 @@
   }
 
   /**
-   * Poblar select de ramas
+   * Populate branch select
    */
   function populateBranchSelect() {
     const select = $("#wpvtp-branch");
     
     if (currentBranches.length === 0) {
-      select.html('<option value="">No hay ramas disponibles</option>');
+      select.html('<option value="">No branches available</option>');
       return;
     }
 
-    let html = '<option value="">Selecciona una rama...</option>';
+    let html = '<option value="">Select a branch...</option>';
 
     currentBranches.forEach(function (branch) {
-      // Destacar rama principal
+      // Highlight main branch
       const isMain = branch.name === 'main' || branch.name === 'master';
       const star = isMain ? '⭐ ' : '';
       
@@ -549,11 +520,11 @@
     });
 
     select.html(html);
-    debugLog(`${currentBranches.length} ramas cargadas`);
+    debugLog(`${currentBranches.length} branches loaded`);
   }
 
   /**
-   * Mostrar resumen de instalación
+   * Show installation summary
    */
   function showInstallSummary() {
     if (!selectedRepo) return;
@@ -562,22 +533,23 @@
     const customName = $("#wpvtp-custom-name").val().trim();
     const finalName = customName || selectedRepo.name;
     
-    const privacyBadge = selectedRepo.private ? '🔒 Privado' : '🌐 Público';
+    const privacyBadge = selectedRepo.private ? '🔒 Private' : '🌐 Public';
+    const typeLabel = selectedRepo.detected_type === 'theme' ? '🎨 Theme' : '🔌 Plugin';
 
     const summary = `
-      <h4>Resumen de Instalación</h4>
-      <p><strong>Repositorio:</strong> ${selectedRepo.full_name} (${privacyBadge})</p>
-      <p><strong>Rama:</strong> ${branch}</p>
-      <p><strong>Tipo:</strong> ${selectedRepo.detected_type === 'theme' ? '🎨 Tema' : '🔌 Plugin'}</p>
-      ${customName ? `<p><strong>Nombre personalizado:</strong> ${customName}</p>` : ''}
-      <p><strong>Nombre final:</strong> ${finalName}</p>
+      <h4>Installation Summary</h4>
+      <p><strong>Repository:</strong> ${selectedRepo.full_name} (${privacyBadge})</p>
+      <p><strong>Branch:</strong> ${branch}</p>
+      <p><strong>Type:</strong> ${typeLabel}</p>
+      ${customName ? `<p><strong>Custom Name:</strong> ${customName}</p>` : ''}
+      <p><strong>Final Name:</strong> ${finalName}</p>
     `;
 
     $("#wpvtp-install-summary").html(summary);
   }
 
   /**
-   * Instalar repositorio
+   * Install repository
    */
   function installRepository() {
     if (!selectedRepo) return;
@@ -587,7 +559,7 @@
     const button = $("#wpvtp-install-form button[type='submit']");
     const resultsDiv = $("#wpvtp-install-results");
 
-    debugLog('Iniciando instalación...', {
+    debugLog('Starting installation...', {
       repo: selectedRepo.full_name,
       branch: branch,
       customName: customName
@@ -606,17 +578,17 @@
       nonce: wpvtp_ajax.nonce,
     })
       .done(function (response) {
-        debugLog('Respuesta de instalación:', response);
+        debugLog('Installation response:', response);
         
         if (response.success) {
           resultsDiv
             .addClass("success")
             .html(
               `
-                <h3>✅ Instalación Exitosa</h3>
+                <h3>✅ Installation Successful</h3>
                 <p>${response.message}</p>
                 <p style="margin-top: 15px;">
-                  <a href="${wpvtp_ajax.admin_url}admin.php?page=wp-versions-themes-plugins" class="button button-primary">Ver Repositorios</a>
+                  <a href="${wpvtp_ajax.admin_url}admin.php?page=wp-versions-themes-plugins" class="button button-primary">View Repositories</a>
                 </p>
               `
             )
@@ -631,7 +603,7 @@
             .addClass("error")
             .html(
               `
-                <h3>❌ Error en la Instalación</h3>
+                <h3>❌ Installation Error</h3>
                 <p>${response.error}</p>
               `
             )
@@ -640,14 +612,14 @@
         }
       })
       .fail(function (xhr, status, error) {
-        debugLog('Error en instalación:', { xhr, status, error });
+        debugLog('Installation error:', { xhr, status, error });
         
         resultsDiv
           .addClass("error")
           .html(
             `
-              <h3>❌ Error de Conexión</h3>
-              <p>No se pudo conectar con el servidor. Por favor intenta nuevamente.</p>
+              <h3>❌ Connection Error</h3>
+              <p>Could not connect to the server. Please try again.</p>
             `
           )
           .show()
@@ -659,13 +631,13 @@
   }
 
   /**
-   * Actualizar repositorio
+   * Update repository
    */
   function updateRepository(localPath, button) {
     const originalText = button.text();
-    button.addClass("loading").prop("disabled", true);
+    button.addClass("loading").prop("disabled", true).text('Updating...'); // Manual text change
 
-    debugLog('Actualizando repositorio:', localPath);
+    debugLog('Updating repository:', localPath);
 
     $.post(wpvtp_ajax.ajax_url, {
       action: "wpvtp_update_repository",
@@ -682,20 +654,20 @@
       })
       .fail(function () {
         showNotification(
-          "❌ Error de conexión al actualizar repositorio",
+          "❌ Connection error while updating repository",
           "error"
         );
       })
       .always(function () {
-        button.removeClass("loading").prop("disabled", false);
+        button.removeClass("loading").prop("disabled", false).text(originalText);
       });
   }
 
   /**
-   * Eliminar repositorio
+   * Remove repository
    */
   function removeRepository(localPath) {
-    debugLog('Eliminando repositorio:', localPath);
+    debugLog('Removing repository:', localPath);
     
     $.post(wpvtp_ajax.ajax_url, {
       action: "wpvtp_remove_repository",
@@ -712,14 +684,14 @@
       })
       .fail(function () {
         showNotification(
-          "❌ Error de conexión al eliminar repositorio",
+          "❌ Connection error while removing repository",
           "error"
         );
       });
   }
 
   /**
-   * Mostrar modal para cambiar rama
+   * Show modal to switch branch
    */
   function showBranchModal(localPath, repoUrl) {
     const urlParts = repoUrl
@@ -730,15 +702,15 @@
     const repo = urlParts[1];
 
     showModal(
-      "Cambiar Rama",
+      "Switch Branch",
       `
-        <p>Selecciona la nueva rama para este repositorio:</p>
+        <p>Select the new branch for this repository:</p>
         <select id="branch-select" style="width: 100%; margin-bottom: 15px;">
-          <option value="">Cargando ramas...</option>
+          <option value="">Loading branches...</option>
         </select>
         <div style="text-align: right;">
-          <button type="button" class="button" onclick="closeModal()">Cancelar</button>
-          <button type="button" class="button button-primary" id="confirm-branch-switch" disabled>Cambiar Rama</button>
+          <button type="button" class="button" onclick="closeModal()">Cancel</button>
+          <button type="button" class="button button-primary" id="confirm-branch-switch" disabled>Switch Branch</button>
         </div>
       `,
       function () {
@@ -748,7 +720,7 @@
   }
 
   /**
-   * Cargar ramas para el modal
+   * Load branches for the modal
    */
   function loadBranchesForModal(owner, repo, localPath) {
     const select = $("#branch-select");
@@ -761,7 +733,7 @@
     })
       .done(function (response) {
         if (response.success) {
-          let html = '<option value="">Selecciona una rama...</option>';
+          let html = '<option value="">Select a branch...</option>';
           response.data.forEach(function (branch) {
             const star = (branch.name === 'main' || branch.name === 'master') ? '⭐ ' : '';
             html += `<option value="${branch.name}">${star}${branch.name}</option>`;
@@ -780,19 +752,19 @@
             }
           });
         } else {
-          select.html('<option value="">Error al cargar ramas</option>');
+          select.html('<option value="">Error loading branches</option>');
         }
       })
       .fail(function () {
-        select.html('<option value="">Error de conexión</option>');
+        select.html('<option value="">Connection error</option>');
       });
   }
 
   /**
-   * Cambiar rama de un repositorio
+   * Switch repository branch
    */
   function switchBranch(localPath, newBranch) {
-    debugLog('Cambiando rama:', { localPath, newBranch });
+    debugLog('Switching branch:', { localPath, newBranch });
     
     $.post(wpvtp_ajax.ajax_url, {
       action: "wpvtp_switch_branch",
@@ -809,12 +781,12 @@
         }
       })
       .fail(function () {
-        showNotification("❌ Error de conexión al cambiar rama", "error");
+        showNotification("❌ Connection error while switching branch", "error");
       });
   }
 
   /**
-   * Utilidades de UI
+   * UI Utilities
    */
   function showStep(stepName) {
     $(`#step-${stepName}`).show().addClass("wpvtp-fade-in");
@@ -840,7 +812,7 @@
       <div class="wpvtp-notification notice notice-${type} is-dismissible" style="position: fixed; top: 32px; right: 20px; z-index: 100000; max-width: 400px;">
         <p>${message}</p>
         <button type="button" class="notice-dismiss">
-          <span class="screen-reader-text">Cerrar esta notificación.</span>
+          <span class="screen-reader-text">Close this notice.</span>
         </button>
       </div>
     `);
@@ -897,7 +869,7 @@
   function showConfirmModal(
     title,
     message,
-    confirmText = "Confirmar",
+    confirmText = "Confirm",
     confirmClass = "button-primary",
     onConfirm = null
   ) {
@@ -906,7 +878,7 @@
       `
         <p>${message}</p>
         <div style="text-align: right; margin-top: 20px;">
-          <button type="button" class="button" onclick="closeModal()">Cancelar</button>
+          <button type="button" class="button" onclick="closeModal()">Cancel</button>
           <button type="button" class="button ${confirmClass}" id="confirm-action" style="margin-left: 10px;">${confirmText}</button>
         </div>
       `
