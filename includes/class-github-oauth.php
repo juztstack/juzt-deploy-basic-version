@@ -4,8 +4,8 @@
  * 
  * Maneja la autenticación OAuth con GitHub
  * 
- * @package WP_Versions_Themes_Plugins
- * @since 1.2.0
+ * @package WP_Versions_Plugins_Themes
+ * @since 1.5.0
  */
 
 // Prevenir acceso directo

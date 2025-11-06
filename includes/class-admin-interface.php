@@ -3,8 +3,8 @@
 /**
  * Admin Interface Class
  * * Maneja toda la interfaz de administración del plugin
- * * @package WP_Versions_Themes_Plugins
- * @since 1.3.0
+ * * @package WP_Versions_Plugins_Themes
+ * @since 1.5.0
  */
 
 // Prevenir acceso directo

@@ -5,8 +5,8 @@
  * Maneja toda la comunicación con el servicio OAuth (middleware).
  * Actualizado con soporte para GitHub Apps e Installation Tokens.
  *
- * @package WP_Versions_Themes_Plugins
- * @since 1.4.0
+ * @package WP_Versions_Plugins_Themes
+ * @since 1.5.0
  */
 
 // Prevenir acceso directo
@@ -19,8 +19,8 @@ class WPVTP_OAuth_Service
     /**
      * URL del servicio middleware
      */
-    const OAUTH_SERVICE_URL = 'https://oauth-proxy-github.onrender.com';
-    //const OAUTH_SERVICE_URL = 'https://aa2b2acc684a.ngrok-free.app';
+    const OAUTH_SERVICE_URL = 'https://github-app-api-production.up.railway.app';
+    //const OAUTH_SERVICE_URL = 'https://16002e156c8e.ngrok-free.app';
 
     /**
      * Propiedades de la clase

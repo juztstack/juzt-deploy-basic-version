@@ -5,8 +5,8 @@
  * 
  * Maneja todas las operaciones Git locales y gestión de repositorios
  * 
- * @package WP_Versions_Themes_Plugins
- * @since 1.2.0
+ * @package WP_Versions_Plugins_Themes
+ * @since 1.5.0
  */
 
 // Prevenir acceso directo

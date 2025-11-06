@@ -4,7 +4,7 @@
  * Plugin Name: WP Versions Themes & Plugins
  * Plugin URI: https://github.com/jesusuzcategui/wp-versions-themes-plugins
  * Description: Sistema de gestión de repositorios GitHub integrado en WordPress Admin que permite clonar, actualizar y gestionar plugins/themes directamente desde repositorios GitHub manteniendo el versionamiento Git completo.
- * Version: 1.4.0
+ * Version: 1.5.0
  * Author: Jesus Uzcategui
  * Author URI: https://github.com/jesusuzcategui
  * License: GPL v2 or later
