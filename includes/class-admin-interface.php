@@ -4,7 +4,7 @@
  * Admin Interface Class
  * * Handles all the plugin's administration interface
  * * @package WP_Versions_Plugins_Themes
- * @since 1.5.0
+ * @since 1.6.0
  */
 
 // Prevent direct access
@@ -47,7 +47,9 @@ class WPVTP_Admin_Interface
         $this->current_page = isset($_GET['tab']) ? sanitize_text_field($_GET['tab']) : 'dashboard';
 
         echo '<div class="wrap wpvtp-admin">';
-        echo '<h1>WP Versions Themes & Plugins</h1>';
+        echo '<h1>Juzt Deploy</h1>';
+        echo '<p>A fast way to deploy themes and plugins from Github to Wordpress site.</p>';
+        echo '<p>Created by Jesus Uzcategui and Juzt Stack Project.</p>';
 
         // Check Git availability
         if (!$this->repo_manager->is_git_available()) {
@@ -142,6 +144,14 @@ class WPVTP_Admin_Interface
         echo '<h3 style="margin: 0 0 10px 0;">' . $stats['plugins'] . '</h3>';
         echo '<p style="margin: 0; color: #666;">Plugins</p>';
         echo '</div>';
+        echo '</div>';
+        
+        // Botón para descargar wp-content
+        echo '<div style="margin: 20px 0;">';
+        echo '<button type="button" id="wpvtp-download-wp-content" class="button button-primary button-large">';
+        echo '📦 Download wp-content path';
+        echo '</button>';
+        echo '<p class="description" style="margin-top: 8px;">Download the WP Content path to use as local development with Juzt CLI</p>';
         echo '</div>';
 
         // Repository Table
