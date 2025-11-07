@@ -4,7 +4,7 @@
  * Updated for GitHub Apps with Installation Tokens support
  *
  * @package WP_Versions_Plugins_Themes
- * @since 1.5.0
+ * @since 1.6.0
  */
 
 (function ($) {
@@ -37,6 +37,44 @@
     initializeWizard();
     initializeActions();
     initializeTokenValidation();
+    
+    $('#wpvtp-download-wp-content').on('click', function(e) {
+        e.preventDefault();
+        
+        const defaultName = 'wp-content-backup-' + new Date().toISOString().split('T')[0];
+        const zipName = prompt('File name for the zip export without ext:', defaultName);
+        
+        if (!zipName) {
+            return; // Usuario canceló
+        }
+
+        const button = $(this);
+        const originalText = button.text();
+        
+        button.text('Creanting ZIP...').prop('disabled', true);
+
+        $.post(wpvtp_ajax.ajax_url, {
+            action: 'wpvtp_download_wp_content',
+            zip_name: zipName,
+            nonce: wpvtp_ajax.nonce
+        })
+        .done(function(response) {
+            if (response.success) {
+                showNotification('✅ ZIP created' + response.data.filename + ' (' + response.data.size + ')', 'success');
+                
+                // Descargar archivo automáticamente
+                window.location.href = response.data.download_url;
+            } else {
+                showNotification('❌ Error: ' + response.data, 'error');
+            }
+        })
+        .fail(function() {
+            showNotification('❌ Error on creating zip', 'error');
+        })
+        .always(function() {
+            button.text(originalText).prop('disabled', false);
+        });
+    });
 
     // Load organizations automatically if we are on the installation page
     if ($("#wpvtp-organization").length) {
