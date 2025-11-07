@@ -6,7 +6,7 @@
  * Actualizado con soporte para GitHub Apps e Installation Tokens.
  *
  * @package WP_Versions_Plugins_Themes
- * @since 1.5.0
+ * @since 1.6.0
  */
 
 // Prevenir acceso directo
@@ -45,6 +45,8 @@ class WPVTP_AJAX_Handlers
         add_action('wp_ajax_wpvtp_switch_branch', array($this, 'switch_branch'));
         add_action('wp_ajax_wpvtp_remove_repository', array($this, 'remove_repository'));
         add_action('wp_ajax_wpvtp_disconnect_github', array($this, 'ajax_disconnect_github'));
+        add_action('wp_ajax_wpvtp_download_wp_content', array($this, 'download_wp_content'));
+        add_action('wp_ajax_wpvtp_serve_zip', array($this, 'serve_zip_file'));
     }
 
     /**
@@ -326,6 +328,71 @@ class WPVTP_AJAX_Handlers
         delete_option('wpvtp_github_user');
         
         wp_send_json_success(array('message' => 'Desconectado de GitHub exitosamente'));
+    }
+    
+    /**
+     * Descargar wp-content como ZIP
+     */
+    public function download_wp_content()
+    {
+        check_ajax_referer('wpvtp_nonce', 'nonce');
+        
+        $zip_name = isset($_POST['zip_name']) ? sanitize_text_field($_POST['zip_name']) : '';
+        
+        if (empty($zip_name)) {
+            wp_send_json_error('Nombre de archivo requerido');
+            return;
+        }
+
+        require_once WPVTP_PLUGIN_DIR . 'includes/class-repo-manager.php';
+        $repo_manager = new WPVTP_Repo_Manager();
+        
+        $result = $repo_manager->create_wp_content_zip($zip_name);
+        
+        if ($result['success']) {
+            // Devolver URL temporal para descargar
+            wp_send_json_success(array(
+                'download_url' => admin_url('admin-ajax.php?action=wpvtp_serve_zip&file=' . urlencode(basename($result['filepath'])) . '&nonce=' . wp_create_nonce('wpvtp_download')),
+                'filename' => $result['filename'],
+                'size' => size_format($result['size'])
+            ));
+        } else {
+            wp_send_json_error($result['error']);
+        }
+    }
+
+    /**
+     * Servir archivo ZIP para descarga
+     */
+    public function serve_zip_file()
+    {
+        $nonce = isset($_GET['nonce']) ? $_GET['nonce'] : '';
+        $file = isset($_GET['file']) ? sanitize_file_name($_GET['file']) : '';
+
+        if (!wp_verify_nonce($nonce, 'wpvtp_download')) {
+            wp_die('Acceso no autorizado');
+        }
+
+        $filepath = get_temp_dir() . $file;
+
+        if (!file_exists($filepath)) {
+            wp_die('Archivo no encontrado');
+        }
+
+        // Headers para descarga
+        header('Content-Type: application/zip');
+        header('Content-Disposition: attachment; filename="' . $file . '"');
+        header('Content-Length: ' . filesize($filepath));
+        header('Pragma: no-cache');
+        header('Expires: 0');
+
+        // Enviar archivo
+        readfile($filepath);
+
+        // Eliminar archivo temporal
+        unlink($filepath);
+
+        exit;
     }
 }
 
