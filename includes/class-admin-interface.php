@@ -4,7 +4,7 @@
  * Admin Interface Class
  * * Handles all the plugin's administration interface
  * * @package WP_Versions_Plugins_Themes
- * @since 1.6.0
+ * @since 1.7.0
  */
 
 // Prevent direct access
@@ -66,6 +66,9 @@ class WPVTP_Admin_Interface
             case 'install':
                 $this->render_install_page();
                 break;
+            case 'commits_queue':
+                $this->render_commits_queue_page();
+                break;
             case 'settings':
                 $this->render_settings_page();
                 break;
@@ -96,6 +99,7 @@ class WPVTP_Admin_Interface
         $tabs = array(
             'dashboard' => 'Dashboard',
             'install' => 'Install Repository',
+            'commits_queue' => 'Commits Queue',
             'settings' => 'Settings'
         );
 
@@ -370,6 +374,65 @@ class WPVTP_Admin_Interface
         }
 
         echo '</div>';
+        echo '</div>';
+    }
+    
+    private function render_commits_queue_page()
+    {
+        echo '<div class="wpvtp-commits-queue">';
+        echo '<h2>Commits Queue</h2>';
+    
+        global $wpdb;
+        $table_name = $wpdb->prefix . 'wpvtp_commits_queue';
+        
+        $commits = $wpdb->get_results(
+            "SELECT * FROM $table_name ORDER BY created_at DESC LIMIT 100",
+            ARRAY_A
+        );
+    
+        if (empty($commits)) {
+            echo '<div class="notice notice-info"><p>Commits no has enqueue</p></div>';
+            echo '</div>';
+            return;
+        }
+    
+        echo '<table class="wp-list-table widefat fixed striped">';
+        echo '<thead><tr>';
+        echo '<th>ID</th>';
+        echo '<th>Path</th>';
+        echo '<th>Message</th>';
+        echo '<th>Status</th>';
+        echo '<th>Attempts</th>';
+        echo '<th>Date</th>';
+        echo '<th>Error</th>';
+        echo '<th>Actions</th>';
+        echo '</tr></thead>';
+        echo '<tbody>';
+    
+        foreach ($commits as $commit) {
+            $status_class = $commit['status'] === 'completed' ? 'success' : ($commit['status'] === 'failed' ? 'error' : 'warning');
+            $status_icon = $commit['status'] === 'completed' ? '✅' : ($commit['status'] === 'failed' ? '❌' : '⏳');
+            
+            echo '<tr>';
+            echo '<td>' . $commit['id'] . '</td>';
+            echo '<td><code>' . basename($commit['theme_path']) . '</code></td>';
+            echo '<td>' . esc_html(substr($commit['commit_message'], 0, 50)) . '</td>';
+            echo '<td><span style="color: ' . ($status_class === 'success' ? 'green' : ($status_class === 'error' ? 'red' : 'orange')) . ';">' . $status_icon . ' ' . $commit['status'] . '</span></td>';
+            echo '<td>' . $commit['attempts'] . '</td>';
+            echo '<td>' . human_time_diff(strtotime($commit['created_at'])) . ' ago</td>';
+            echo '<td>' . ($commit['last_error'] ? '<small>' . esc_html(substr($commit['last_error'], 0, 100)) . '</small>' : '-') . '</td>';
+            echo '<td>';
+            
+            if ($commit['status'] !== 'completed') {
+                echo '<button class="button button-small wpvtp-retry-commit" data-id="' . $commit['id'] . '">Re try</button> ';
+            }
+            
+            echo '<button class="button button-small button-link-delete wpvtp-delete-commit" data-id="' . $commit['id'] . '">Delete</button>';
+            echo '</td>';
+            echo '</tr>';
+        }
+    
+        echo '</tbody></table>';
         echo '</div>';
     }
 }

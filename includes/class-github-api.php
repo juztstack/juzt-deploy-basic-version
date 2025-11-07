@@ -5,7 +5,7 @@
  * Maneja toda la comunicación con la API de GitHub a través del servicio OAuth
  * 
  * @package WP_Versions_Plugins_Themes
- * @since 1.5.0
+ * @since 1.7.0
  */
 
 // Prevenir acceso directo

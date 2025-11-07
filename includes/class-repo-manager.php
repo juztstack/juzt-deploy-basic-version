@@ -6,7 +6,7 @@
  * Maneja todas las operaciones Git locales y gestión de repositorios
  * 
  * @package WP_Versions_Plugins_Themes
- * @since 1.6.0
+ * @since 1.7.0
  */
 
 // Prevenir acceso directo
@@ -29,6 +29,21 @@ class WPVTP_Repo_Manager
     {
         global $wpdb;
         $this->table_name = $wpdb->prefix . 'github_repos';
+        add_action('wpvtp_queue_commit', array($this, 'handle_queue_commit_action'), 10, 2);
+        add_filter('wpvtp_queue_commit', array($this, 'handle_queue_commit_filter'), 10, 3);
+        
+    }
+    
+    // AGREGAR nuevo método:
+    public function handle_queue_commit_filter($result, $theme_path, $commit_message)
+    {
+        // Los parámetros llegan invertidos, corregir el orden:
+        return $this->queue_commit($theme_path, $commit_message);
+    }
+        
+    public function handle_queue_commit_action($theme_path, $commit_message)
+    {
+        $this->queue_commit($theme_path, $commit_message);
     }
 
     /**
@@ -745,56 +760,77 @@ class WPVTP_Repo_Manager
 
     public function commit_and_push_changes($identifier, $message = 'Cambios automáticos desde TemplateBuilder')
     {
-        $repo_info = $this->get_repo_by_identifier($identifier);
-        
-        if (!$repo_info) {
-            return ['success' => false, 'error' => 'No se encontró el repositorio.'];
+        // Si $identifier es una ruta completa, usarla directamente
+        if (strpos($identifier, '/') !== false && is_dir($identifier)) {
+            $local_path = $identifier;
+        } else {
+            // Si no, buscar por identifier
+            $repo_info = $this->get_repo_by_identifier($identifier);
+            
+            if (!$repo_info) {
+                return ['success' => false, 'error' => 'No se encontró el repositorio.'];
+            }
+    
+            $local_path = $this->resolve_local_path($repo_info['folder_name'], $repo_info['repo_type']);
         }
-
-        $local_path = $this->resolve_local_path($repo_info['folder_name'], $repo_info['repo_type']);
-
+    
         if (!$this->is_git_available() || !is_dir($local_path . '/.git')) {
             return ['success' => false, 'error' => 'No es un repositorio Git válido.'];
         }
-
+    
         $old_cwd = getcwd();
         chdir($local_path);
-
-        // 1. Configurar la identidad del usuario para este repositorio
-        exec('git config user.name "TemplateBuilder User"');
-        exec('git config user.email "templatebuilderwp@gmail.com"');
-
-        // 2. Añadir todos los cambios
+    
+        // Configurar identidad del GitHub App Bot
+        $github_app_id = get_option('wpvtp_github_app_id', '1953130');
+        $github_app_name = get_option('wpvtp_github_app_name', 'wordpress-theme-versions');
+        
+        exec('git config user.name "' . $github_app_name . '[bot]"');
+        exec('git config user.email "' . $github_app_id . '+' . $github_app_name . '[bot]@users.noreply.github.com"');
+    
         exec('git add -A');
-
-        // 3. Realizar el commit
+    
         $output = [];
         $return_var = 0;
         $command = sprintf('git commit -m %s', escapeshellarg($message));
         exec($command, $output, $return_var);
-
+    
         if ($return_var !== 0) {
             chdir($old_cwd);
-            // Manejar el caso de "nothing to commit"
             if (strpos(implode("\n", $output), 'nothing to commit') !== false) {
                 return ['success' => true, 'message' => 'No hay cambios para registrar.'];
             }
             return ['success' => false, 'error' => 'Error al registrar commit: ' . implode("\n", $output)];
         }
-
-        // 4. Empujar los cambios a la rama actual
-        $current_branch = $this->get_current_branch($repo_info['folder_name']);
+    
+        // Obtener rama actual
+        $branch_output = [];
+        exec('git branch --show-current 2>&1', $branch_output);
+        $current_branch = isset($branch_output[0]) ? trim($branch_output[0]) : 'main';
+        
+        // Asegurar que el remote tiene el token
+        $this->configure_push_authentication($local_path);
+        
+        // Debug: verificar URL del remote
+        $remote_check = [];
+        exec('git remote get-url origin 2>&1', $remote_check);
+        error_log('WPVTP - Remote URL: ' . print_r($remote_check, true));
+        
         $output = [];
         $return_var = 0;
-        $command = sprintf('git push origin %s', escapeshellarg($current_branch));
+        $command = sprintf('git push origin %s 2>&1', escapeshellarg($current_branch));
         exec($command, $output, $return_var);
-
+        
         chdir($old_cwd);
-
+        
+        // Log del resultado del push
+        error_log('WPVTP - Push return code: ' . $return_var);
+        error_log('WPVTP - Push output: ' . print_r($output, true));
+        
         if ($return_var !== 0) {
             return ['success' => false, 'error' => 'Error al empujar los cambios: ' . implode("\n", $output)];
         }
-
+        
         return ['success' => true, 'message' => 'Cambios registrados y empujados exitosamente.'];
     }
 	
@@ -962,5 +998,142 @@ class WPVTP_Repo_Manager
             // Agregar archivo al ZIP
             $zip->addFile($file_path, $zip_path . '/' . $relative_path);
         }
+    }
+    
+    public function queue_commit($theme_path, $commit_message)
+    {
+        global $wpdb;
+        $table_name = $wpdb->prefix . 'wpvtp_commits_queue';
+    
+        // DEBUG: ver qué llega
+        error_log('WPVTP queue_commit - theme_path: ' . $theme_path);
+        error_log('WPVTP queue_commit - commit_message: ' . $commit_message);
+    
+        $inserted = $wpdb->insert(
+            $table_name,
+            array(
+                'theme_path' => $theme_path,
+                'commit_message' => $commit_message,
+                'status' => 'pending',
+                'attempts' => 0,
+                'created_at' => current_time('mysql')
+            ),
+            array('%s', '%s', '%s', '%d', '%s')
+        );
+    
+        if ($inserted) {
+            $commit_id = $wpdb->insert_id;
+            
+            $this->process_commit_queue_item($commit_id);
+            
+            return array(
+                'success' => true,
+                'commit_id' => $commit_id
+            );
+        }
+    
+        return array(
+            'success' => false,
+            'error' => 'Error al encolar commit'
+        );
+    }
+    
+    /**
+     * Verificar y configurar token antes de push
+     */
+    private function configure_push_authentication($repo_path)
+    {
+        $access_token = get_option('wpvtp_oauth_token');
+        
+        if (empty($access_token)) {
+            return false;
+        }
+    
+        $old_cwd = getcwd();
+        chdir($repo_path);
+    
+        // Configurar credential helper en modo cache
+        exec('git config credential.helper "cache --timeout=3600"');
+        
+        // Obtener URL actual
+        $output = [];
+        exec('git remote get-url origin 2>&1', $output);
+        $current_url = isset($output[0]) ? trim($output[0]) : '';
+        
+        // Limpiar URL (remover token viejo si existe)
+        $clean_url = preg_replace('/https:\/\/[^@]+@/', 'https://', $current_url);
+        
+        // Agregar token nuevo
+        $authenticated_url = str_replace(
+            'https://github.com/',
+            'https://x-access-token:' . $access_token . '@github.com/',
+            $clean_url
+        );
+        
+        // Actualizar remote
+        exec('git remote set-url origin ' . escapeshellarg($authenticated_url));
+        
+        chdir($old_cwd);
+        return true;
+    }
+    
+    /**
+     * Procesar item de la cola de commits
+     */
+    public function process_commit_queue_item($commit_id)
+    {
+        global $wpdb;
+        $table_name = $wpdb->prefix . 'wpvtp_commits_queue';
+    
+        $item = $wpdb->get_row(
+            $wpdb->prepare("SELECT * FROM $table_name WHERE id = %d", $commit_id),
+            ARRAY_A
+        );
+    
+        if (!$item) {
+            return array('success' => false, 'error' => 'Item no encontrado');
+        }
+    
+        // Incrementar intentos
+        $wpdb->update(
+            $table_name,
+            array('attempts' => $item['attempts'] + 1),
+            array('id' => $commit_id),
+            array('%d'),
+            array('%d')
+        );
+    
+        // Intentar commit
+        $result = $this->commit_and_push_changes($item['theme_path'], $item['commit_message']);
+    
+        if ($result['success']) {
+            // Éxito
+            $wpdb->update(
+                $table_name,
+                array(
+                    'status' => 'completed',
+                    'processed_at' => current_time('mysql')
+                ),
+                array('id' => $commit_id),
+                array('%s', '%s'),
+                array('%d')
+            );
+        } else {
+            // Fallo
+            $status = $item['attempts'] >= 3 ? 'failed' : 'pending';
+            
+            $wpdb->update(
+                $table_name,
+                array(
+                    'status' => $status,
+                    'last_error' => $result['error']
+                ),
+                array('id' => $commit_id),
+                array('%s', '%s'),
+                array('%d')
+            );
+        }
+    
+        return $result;
     }
 }

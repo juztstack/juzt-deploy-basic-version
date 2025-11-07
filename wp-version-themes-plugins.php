@@ -4,7 +4,7 @@
  * Plugin Name: Juzt Deploy
  * Plugin URI: https://github.com/jesusuzcategui/wp-versions-themes-plugins
  * Description: WordPress theme and plugin version control. Allows you to preview cloned themes without activating them.
- * Version: 1.6.0
+ * Version: 1.7.0
  * Author: Jesus Uzcategui
  * Author URI: https://github.com/jesusuzcategui
  * License: GPL v2 or later
@@ -23,7 +23,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Definir constantes del plugin
-define('WPVTP_VERSION', '1.6.0');
+define('WPVTP_VERSION', '1.7.0');
 define('WPVTP_PLUGIN_FILE', __FILE__);
 define('WPVTP_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('WPVTP_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -160,13 +160,16 @@ class WP_Versions_Themes_Plugins
      */
     public function handle_middleware_callback()
     {
-        if (!isset($_GET['page']) || $_GET['page'] !== 'wp-versions-themes-plugins' || !isset($_GET['session_token'])) {
+        if (!isset($_GET['page']) || $_GET['page'] !== 'wp-versions-themes-plugins' || !isset($_GET['session_token']) || !isset($_GET['refresh_token'])) {
             return;
         }
 
         try {
             $session_token = sanitize_text_field($_GET['session_token']);
+            $refresh_token = sanitize_text_field($_GET['refresh_token']);
             update_option('wpvtp_oauth_token', $session_token);
+            update_option('wpvtp_refresh_token', $refresh_token);
+            update_option('wpvtp_token_last_refresh', time());
             
             // Redirigir a la página de settings para limpiar la URL del token
             $url = admin_url('admin.php?page=wp-versions-themes-plugins&tab=settings');
@@ -307,6 +310,8 @@ class WP_Versions_Themes_Plugins
                 $theme_handle = $_SESSION['wpvtp_preview_theme'];
                 error_log('WPVTP Preview: Aplicando tema desde sesión: ' . $theme_handle);
                 $this->apply_theme_preview($theme_handle);
+                // ✅ AGREGAR ESTA LÍNEA - Mostrar barra también cuando viene de sesión
+                //add_action('wp_footer', array($this, 'add_preview_bar'));
             }
             return;
         }
@@ -344,13 +349,15 @@ class WP_Versions_Themes_Plugins
         error_log('WPVTP Preview: Aplicando tema: ' . $theme_handle);
         $this->apply_theme_preview($theme_handle);
 
-        add_action('wp_footer', array($this, 'add_preview_bar'));
+        
 
         add_action('wp_head', function () use ($theme_handle) {
             error_log('WPVTP Preview: Tema final aplicado - stylesheet: ' . get_stylesheet());
             error_log('WPVTP Preview: Tema final aplicado - template: ' . get_template());
             error_log('WPVTP Preview: Esperado: ' . $theme_handle);
         });
+        
+        add_action('wp_footer', array($this, 'add_preview_bar'));
     }
 
     /**
@@ -384,6 +391,7 @@ class WP_Versions_Themes_Plugins
      */
     public function add_preview_bar()
     {
+        var_dump("HOLA");
         if (!isset($_SESSION['wpvtp_preview_theme'])) {
             return;
         }
@@ -397,12 +405,13 @@ class WP_Versions_Themes_Plugins
             top: 0;
             left: 0;
             right: 0;
-            background: #0073aa;
+            background: #6433ff;
             color: white;
-            padding: 10px 20px;
+            padding: 10px;
             z-index: 999999;
             font-family: -apple-system, BlinkMacSystemFont, \'Segoe UI\', Roboto, sans-serif;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            box-shadow:0 1px 2px rgba(0,0,0,0.8);
+            font-size:12px;
         ">';
         echo '<div style="display: flex; align-items: center; justify-content: space-between;">';
         echo '<div>';
@@ -422,7 +431,9 @@ class WP_Versions_Themes_Plugins
                 headers: {"Content-Type": "application/x-www-form-urlencoded"},
                 body: "action=wpvtp_exit_preview&nonce=' . wp_create_nonce('wpvtp_exit_preview') . '"
             }).then(() => {
-                window.location.href = "' . esc_url($exit_url) . '";
+                setTimeout(function(){
+                    window.location.href = "' . esc_url($exit_url) . '";
+                }, 800);
             });
         }
         
@@ -462,6 +473,8 @@ class WP_Versions_Themes_Plugins
 
         // Limpiar datos OAuth temporales
         delete_transient('wpvtp_oauth_nonce');
+        //crone
+        wp_clear_scheduled_hook('wpvtp_auto_refresh_token');
 
         // Flush rewrite rules
         flush_rewrite_rules();
@@ -494,7 +507,7 @@ class WP_Versions_Themes_Plugins
 
         $charset_collate = $wpdb->get_charset_collate();
 
-        $sql = "CREATE TABLE $table_name (
+        $sql = "CREATE TABLE IF NOT EXISTS $table_name (
             id mediumint(9) NOT NULL AUTO_INCREMENT,
             repo_name varchar(255) NOT NULL,
             repo_url varchar(500) NOT NULL,
@@ -507,12 +520,31 @@ class WP_Versions_Themes_Plugins
             PRIMARY KEY (id),
             UNIQUE KEY local_path (local_path)
         ) $charset_collate;";
+        
+        $table_name_commits = $wpdb->prefix . 'wpvtp_commits_queue';
+        
+        $sql_commit = "CREATE TABLE IF NOT EXISTS $table_name_commits (
+            id bigint(20) NOT NULL AUTO_INCREMENT,
+            theme_path varchar(255) NOT NULL,
+            commit_message text NOT NULL,
+            status varchar(20) NOT NULL DEFAULT 'pending',
+            attempts int(11) NOT NULL DEFAULT 0,
+            last_error text NULL,
+            created_at datetime NOT NULL,
+            processed_at datetime NULL,
+            PRIMARY KEY (id),
+            KEY status (status),
+            KEY created_at (created_at)
+        ) $charset_collate;";
 
         require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
         dbDelta($sql);
+        dbDelta($sql_commit);
         
         // Actualizar versión de la BD
-        update_option('wpvtp_db_version', '1.4.0');
+        update_option('wpvtp_db_version', '1.6.0');
+        update_option('wpvtp_github_app_id', '1953130');
+        update_option('wpvtp_github_app_name', 'wordpress-theme-versions');
     }
 }
 

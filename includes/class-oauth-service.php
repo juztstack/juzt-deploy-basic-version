@@ -6,7 +6,7 @@
  * Actualizado con soporte para GitHub Apps e Installation Tokens.
  *
  * @package WP_Versions_Plugins_Themes
- * @since 1.5.0
+ * @since 1.7.0
  */
 
 // Prevenir acceso directo
@@ -35,6 +35,13 @@ class WPVTP_OAuth_Service
     {
         $this->session_token = get_option('wpvtp_oauth_token');
         $this->refresh_token = get_option('wpvtp_refresh_token');
+        
+        if (!wp_next_scheduled('wpvtp_auto_refresh_token')) {
+            wp_schedule_event(time(), 'hourly', 'wpvtp_auto_refresh_token');
+        }
+        
+        // Hook del cron
+        add_action('wpvtp_auto_refresh_token', array($this, 'auto_refresh_token_if_needed'));
     }
 
     /**
@@ -394,5 +401,39 @@ class WPVTP_OAuth_Service
         }
 
         return $grouped;
+    }
+    
+    public function handle_oauth_callback()
+    {
+        if (!isset($_GET['session_token'])) {
+            return;
+        }
+    
+        $access_token = sanitize_text_field($_GET['session_token']);
+        $refresh_token = isset($_GET['refresh_token']) ? sanitize_text_field($_GET['refresh_token']) : '';
+    
+        update_option('wpvtp_oauth_token', $access_token);
+        
+        if (!empty($refresh_token)) {
+            update_option('wpvtp_refresh_token', $refresh_token);
+        }
+    }
+    
+    public function auto_refresh_token_if_needed()
+    {
+        $last_refresh = get_option('wpvtp_token_last_refresh', 0);
+        $refresh_interval = 7 * 60 * 60 + 50 * 60; // 7 horas 50 minutos en segundos
+        
+        // Si han pasado más de 7h 50min desde el último refresh
+        if ((time() - $last_refresh) >= $refresh_interval) {
+            $result = $this->refresh_access_token();
+            
+            if ($result['success']) {
+                update_option('wpvtp_token_last_refresh', time());
+                error_log('WPVTP: Token refrescado automáticamente');
+            } else {
+                error_log('WPVTP: Error al refrescar token automáticamente: ' . $result['error']);
+            }
+        }
     }
 }

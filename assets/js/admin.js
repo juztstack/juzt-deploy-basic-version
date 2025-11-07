@@ -4,7 +4,7 @@
  * Updated for GitHub Apps with Installation Tokens support
  *
  * @package WP_Versions_Plugins_Themes
- * @since 1.6.0
+ * @since 1.7.0
  */
 
 (function ($) {
@@ -73,6 +73,56 @@
         })
         .always(function() {
             button.text(originalText).prop('disabled', false);
+        });
+    });
+    
+    // Reintentar commit
+    $(document).on('click', '.wpvtp-retry-commit', function() {
+        const button = $(this);
+        const commitId = button.data('id');
+        const originalText = button.text();
+        
+        button.text('Procesando...').prop('disabled', true);
+        
+        $.post(wpvtp_ajax.ajax_url, {
+            action: 'wpvtp_retry_commit',
+            commit_id: commitId,
+            nonce: wpvtp_ajax.nonce
+        })
+        .done(function(response) {
+            if (response.success) {
+                showNotification('✅ ' + response.message, 'success');
+                location.reload();
+            } else {
+                showNotification('❌ ' + response.error, 'error');
+                button.text(originalText).prop('disabled', false);
+            }
+        })
+        .fail(function() {
+            showNotification('❌ Error de conexión', 'error');
+            button.text(originalText).prop('disabled', false);
+        });
+    });
+    
+    // Eliminar commit
+    $(document).on('click', '.wpvtp-delete-commit', function() {
+        if (!confirm('¿Eliminar este commit de la cola?')) return;
+        
+        const button = $(this);
+        const commitId = button.data('id');
+        
+        $.post(wpvtp_ajax.ajax_url, {
+            action: 'wpvtp_delete_commit',
+            commit_id: commitId,
+            nonce: wpvtp_ajax.nonce
+        })
+        .done(function(response) {
+            if (response.success) {
+                showNotification('✅ Commit eliminado', 'success');
+                location.reload();
+            } else {
+                showNotification('❌ Error al eliminar', 'error');
+            }
         });
     });
 

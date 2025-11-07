@@ -6,7 +6,7 @@
  * Actualizado con soporte para GitHub Apps e Installation Tokens.
  *
  * @package WP_Versions_Plugins_Themes
- * @since 1.6.0
+ * @since 1.7.0
  */
 
 // Prevenir acceso directo
@@ -47,6 +47,45 @@ class WPVTP_AJAX_Handlers
         add_action('wp_ajax_wpvtp_disconnect_github', array($this, 'ajax_disconnect_github'));
         add_action('wp_ajax_wpvtp_download_wp_content', array($this, 'download_wp_content'));
         add_action('wp_ajax_wpvtp_serve_zip', array($this, 'serve_zip_file'));
+        add_action('wp_ajax_wpvtp_retry_commit', array($this, 'retry_commit'));
+        add_action('wp_ajax_wpvtp_delete_commit', array($this, 'delete_commit'));
+    }
+    
+    /**
+     * Reintentar commit desde la cola
+     */
+    public function retry_commit()
+    {
+        check_ajax_referer('wpvtp_nonce', 'nonce');
+        
+        $commit_id = intval($_POST['commit_id']);
+        
+        require_once WPVTP_PLUGIN_DIR . 'includes/class-repo-manager.php';
+        $repo_manager = new WPVTP_Repo_Manager();
+        
+        $result = $repo_manager->process_commit_queue_item($commit_id);
+        
+        wp_send_json($result);
+    }
+    
+    /**
+     * Eliminar commit de la cola
+     */
+    public function delete_commit()
+    {
+        check_ajax_referer('wpvtp_nonce', 'nonce');
+        
+        global $wpdb;
+        $commit_id = intval($_POST['commit_id']);
+        $table_name = $wpdb->prefix . 'wpvtp_commits_queue';
+        
+        $deleted = $wpdb->delete($table_name, array('id' => $commit_id), array('%d'));
+        
+        if ($deleted) {
+            wp_send_json_success('Commit eliminado');
+        } else {
+            wp_send_json_error('Error al eliminar');
+        }
     }
 
     /**
