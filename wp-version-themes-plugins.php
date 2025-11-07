@@ -1,10 +1,10 @@
 <?php
 
 /**
- * Plugin Name: WP Versions Themes & Plugins
+ * Plugin Name: Juzt Deploy
  * Plugin URI: https://github.com/jesusuzcategui/wp-versions-themes-plugins
- * Description: Sistema de gestión de repositorios GitHub integrado en WordPress Admin que permite clonar, actualizar y gestionar plugins/themes directamente desde repositorios GitHub manteniendo el versionamiento Git completo.
- * Version: 1.5.0
+ * Description: WordPress theme and plugin version control. Allows you to preview cloned themes without activating them.
+ * Version: 1.6.0
  * Author: Jesus Uzcategui
  * Author URI: https://github.com/jesusuzcategui
  * License: GPL v2 or later
@@ -23,7 +23,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Definir constantes del plugin
-define('WPVTP_VERSION', '1.4.0');
+define('WPVTP_VERSION', '1.6.0');
 define('WPVTP_PLUGIN_FILE', __FILE__);
 define('WPVTP_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('WPVTP_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -47,7 +47,7 @@ if (version_compare(PHP_VERSION, '7.4', '<')) {
 function wpvtp_wordpress_version_notice()
 {
     echo '<div class="notice notice-error"><p>';
-    echo __('WP Versions Themes & Plugins requiere WordPress 5.0 o superior.', 'wp-versions-themes-plugins');
+    echo __('Juzt deploy requiere WordPress 5.0 o superior.', 'wp-versions-themes-plugins');
     echo '</p></div>';
 }
 
@@ -57,7 +57,7 @@ function wpvtp_wordpress_version_notice()
 function wpvtp_php_version_notice()
 {
     echo '<div class="notice notice-error"><p>';
-    echo __('WP Versions Themes & Plugins requiere PHP 7.4 o superior.', 'wp-versions-themes-plugins');
+    echo __('Juzt Deploy requiere PHP 7.4 o superior.', 'wp-versions-themes-plugins');
     echo '</p></div>';
 }
 
@@ -216,8 +216,8 @@ class WP_Versions_Themes_Plugins
     public function add_admin_menu()
     {
         add_menu_page(
-            __('WP Versions', 'wp-versions-themes-plugins'), // Page title
-            __('WP Versions', 'wp-versions-themes-plugins'), // Menu title
+            __('Juzt Deploy', 'wp-versions-themes-plugins'), // Page title
+            __('Juzt Deploy', 'wp-versions-themes-plugins'), // Menu title
             'manage_options', // Capability
             'wp-versions-themes-plugins', // Menu slug
             array($this, 'admin_page'), // Function
@@ -406,11 +406,11 @@ class WP_Versions_Themes_Plugins
         ">';
         echo '<div style="display: flex; align-items: center; justify-content: space-between;">';
         echo '<div>';
-        echo '<strong>Vista Previa del Tema:</strong> ' . esc_html($theme_handle);
+        echo '<strong>Preview:</strong> ' . esc_html($theme_handle);
         echo '</div>';
         echo '<div>';
-        echo '<a href="' . esc_url($admin_url) . '" style="color: white; text-decoration: none; margin-right: 15px;">Administrar</a>';
-        echo '<a href="' . esc_url($exit_url) . '" style="color: white; text-decoration: none;" onclick="wpvtp_exit_preview()">Salir Preview</a>';
+        echo '<a href="' . esc_url($admin_url) . '" style="color: white; text-decoration: none; margin-right: 15px;">Manage</a>';
+        echo '<a href="' . esc_url($exit_url) . '" style="color: white; text-decoration: none;" onclick="wpvtp_exit_preview()">Exit</a>';
         echo '</div>';
         echo '</div>';
         echo '</div>';
