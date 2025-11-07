@@ -6,7 +6,7 @@
  * Maneja todas las operaciones Git locales y gestión de repositorios
  * 
  * @package WP_Versions_Plugins_Themes
- * @since 1.5.0
+ * @since 1.6.0
  */
 
 // Prevenir acceso directo
@@ -860,5 +860,107 @@ class WPVTP_Repo_Manager
         chdir($old_cwd);
 
         return isset($output[0]) ? trim($output[0]) : false;
+    }
+    
+    /**
+     * Crear ZIP de wp-content
+     * 
+     * @param string $zip_name Nombre del archivo ZIP (sin extensión)
+     * @return array
+     */
+    public function create_wp_content_zip($zip_name)
+    {
+        // Sanitizar nombre
+        $zip_name = sanitize_file_name($zip_name);
+        
+        if (empty($zip_name)) {
+            return array(
+                'success' => false,
+                'error' => 'Nombre de archivo inválido'
+            );
+        }
+
+        // Verificar que la clase ZipArchive existe
+        if (!class_exists('ZipArchive')) {
+            return array(
+                'success' => false,
+                'error' => 'ZipArchive no está disponible en el servidor'
+            );
+        }
+
+        // Paths
+        $wp_content_path = WP_CONTENT_DIR;
+        $temp_dir = get_temp_dir();
+        $zip_filename = $zip_name . '.zip';
+        $zip_filepath = $temp_dir . $zip_filename;
+
+        // Eliminar ZIP anterior si existe
+        if (file_exists($zip_filepath)) {
+            unlink($zip_filepath);
+        }
+
+        // Crear ZIP
+        $zip = new ZipArchive();
+        if ($zip->open($zip_filepath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== TRUE) {
+            return array(
+                'success' => false,
+                'error' => 'No se pudo crear el archivo ZIP'
+            );
+        }
+
+        // Agregar archivos al ZIP
+        $this->add_directory_to_zip($zip, $wp_content_path, 'wp-content');
+
+        $zip->close();
+
+        // Verificar que se creó
+        if (!file_exists($zip_filepath)) {
+            return array(
+                'success' => false,
+                'error' => 'Error al crear el archivo ZIP'
+            );
+        }
+
+        return array(
+            'success' => true,
+            'filepath' => $zip_filepath,
+            'filename' => $zip_filename,
+            'size' => filesize($zip_filepath)
+        );
+    }
+
+    /**
+     * Agregar directorio recursivamente al ZIP
+     * 
+     * @param ZipArchive $zip
+     * @param string $source_path
+     * @param string $zip_path
+     */
+    private function add_directory_to_zip($zip, $source_path, $zip_path)
+    {
+        $source_path = rtrim($source_path, '/');
+        $zip_path = rtrim($zip_path, '/');
+
+        // Crear directorio en el ZIP
+        $zip->addEmptyDir($zip_path);
+
+        // Obtener archivos y directorios
+        $files = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($source_path),
+            RecursiveIteratorIterator::LEAVES_ONLY
+        );
+
+        foreach ($files as $file) {
+            // Skip directorios (ya se agregan con addEmptyDir)
+            if ($file->isDir()) {
+                continue;
+            }
+
+            $file_path = $file->getRealPath();
+            $relative_path = substr($file_path, strlen($source_path) + 1);
+
+            // Agregar archivo al ZIP
+            $zip->addFile($file_path, $zip_path . '/' . $relative_path);
+        }
     }
 }
