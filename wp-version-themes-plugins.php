@@ -4,7 +4,7 @@
  * Plugin Name: Juzt Deploy
  * Plugin URI: https://github.com/jesusuzcategui/wp-versions-themes-plugins
  * Description: WordPress theme and plugin version control. Allows you to preview cloned themes without activating them.
- * Version: 1.7.0
+ * Version: 1.8.0
  * Author: Jesus Uzcategui
  * Author URI: https://github.com/jesusuzcategui
  * License: GPL v2 or later
@@ -23,7 +23,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Definir constantes del plugin
-define('WPVTP_VERSION', '1.7.0');
+define('WPVTP_VERSION', '1.8.0');
 define('WPVTP_PLUGIN_FILE', __FILE__);
 define('WPVTP_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('WPVTP_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -308,6 +308,7 @@ class WP_Versions_Themes_Plugins
 
             if (isset($_SESSION['wpvtp_preview_theme'])) {
                 $theme_handle = $_SESSION['wpvtp_preview_theme'];
+				session_write_close();
                 error_log('WPVTP Preview: Aplicando tema desde sesión: ' . $theme_handle);
                 $this->apply_theme_preview($theme_handle);
                 // ✅ AGREGAR ESTA LÍNEA - Mostrar barra también cuando viene de sesión
@@ -345,6 +346,7 @@ class WP_Versions_Themes_Plugins
             session_start();
         }
         $_SESSION['wpvtp_preview_theme'] = $theme_handle;
+		session_write_close();
 
         error_log('WPVTP Preview: Aplicando tema: ' . $theme_handle);
         $this->apply_theme_preview($theme_handle);
@@ -391,7 +393,7 @@ class WP_Versions_Themes_Plugins
      */
     public function add_preview_bar()
     {
-        var_dump("HOLA");
+        
         if (!isset($_SESSION['wpvtp_preview_theme'])) {
             return;
         }
@@ -492,6 +494,7 @@ class WP_Versions_Themes_Plugins
         }
 
         unset($_SESSION['wpvtp_preview_theme']);
+		session_write_close();
 
         wp_send_json_success();
     }
@@ -566,6 +569,7 @@ add_action('init', function () {
     // Mantener preview en navegación solo si no hay parámetro wpvtheme
     if (isset($_SESSION['wpvtp_preview_theme']) && !isset($_GET['wpvtheme'])) {
         $theme_handle = $_SESSION['wpvtp_preview_theme'];
+		session_write_close();
 
         // Verificar que el tema aún existe
         $theme_path = get_theme_root() . '/' . $theme_handle;
