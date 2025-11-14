@@ -4,12 +4,24 @@ This is a plugin for WordPress that allows you to clone repositories as plugins 
 
 ## Changelog
 
+### v1.9.0
+```
+- Fix issues with the git command when it is not present on hosting.
+- Add mode connection with the API GITHUB to  clone, pull, and push changes.
+```
+
+<img width="1581" height="799" alt="image" src="https://github.com/user-attachments/assets/0f1ffc67-1fc2-4baa-bf1e-feb29b82c962" />
+
+
+<img width="1582" height="1250" alt="image" src="https://github.com/user-attachments/assets/b1adeb58-4954-4a37-912f-4b38c3a5ce37" />
+
+
 ### v1.7.0
 ```
 - Fix issues with private repositories.
-- Add filter to auto commit changes from Section Builder v1
+- Add filter to auto-commit changes from Section Builder v1
 - Add refresh token
-- Add Queue commits managment
+- Add Queue commits management
 ```
 
 
