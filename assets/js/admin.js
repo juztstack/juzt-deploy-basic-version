@@ -17,113 +17,189 @@
   let selectedRepo = null;
 
   // DEBUG MODE - Change to false in production
-  const DEBUG = typeof wpvtp_ajax !== 'undefined' && wpvtp_ajax.debug === '1';
+  const DEBUG = typeof wpvtp_ajax !== "undefined" && wpvtp_ajax.debug === "1";
 
   /**
    * Conditional logging for debug
    */
   function debugLog(message, data = null) {
     if (DEBUG) {
-      console.log('[WPVTP Debug]', message, data || '');
+      console.log("[WPVTP Debug]", message, data || "");
     }
+  }
+
+  function startProgressTracking(jobId, onComplete, onError, customContainer) {
+    const progressBar = $(
+      '<div class="wpvtp-progress-container" style="margin: 20px 0;">' +
+        '<div class="wpvtp-progress-info" style="margin-bottom: 10px;">' +
+        '<strong class="wpvtp-progress-message">Iniciando...</strong>' +
+        '<span class="wpvtp-progress-percentage" style="float: right;">0%</span>' +
+        "</div>" +
+        '<div class="wpvtp-progress-bar-bg" style="background: #e0e0e0; height: 20px; border-radius: 10px; overflow: hidden;">' +
+        '<div class="wpvtp-progress-bar" style="background: #0073aa; height: 100%; width: 0%; transition: width 0.3s;"></div>' +
+        "</div>" +
+        "</div>"
+    );
+
+    if (customContainer) {
+      customContainer.html(progressBar);
+    } else {
+      $("#wpvtp-install-form").after(progressBar);
+    }
+
+    progressBar.fadeIn();
+
+    let pollInterval = setInterval(function () {
+      $.post(wpvtp_ajax.ajax_url, {
+        action: "wpvtp_get_progress",
+        job_id: jobId,
+        nonce: wpvtp_ajax.nonce,
+      }).done(function (response) {
+        if (response.success) {
+          const data = response.data;
+
+          progressBar.find(".wpvtp-progress-message").text(data.message);
+          progressBar
+            .find(".wpvtp-progress-percentage")
+            .text(data.progress + "%");
+          progressBar
+            .find(".wpvtp-progress-bar")
+            .css("width", data.progress + "%");
+
+          if (data.step === "completed") {
+            clearInterval(pollInterval);
+            progressBar
+              .find(".wpvtp-progress-bar")
+              .css("background", "#46b450");
+            setTimeout(function () {
+              progressBar.fadeOut(function () {
+                if (customContainer) {
+                  customContainer.remove();
+                } else {
+                  progressBar.remove();
+                }
+              });
+              if (onComplete) onComplete();
+            }, 2000);
+          } else if (data.step === "error") {
+            clearInterval(pollInterval);
+            progressBar
+              .find(".wpvtp-progress-bar")
+              .css("background", "#dc3232");
+            if (onError) onError(data.message);
+          }
+        }
+      });
+    }, 1000);
   }
 
   /**
    * Initialization when the document is ready
    */
   $(document).ready(function () {
-    debugLog('Initializing plugin...');
-    
+    debugLog("Initializing plugin...");
+
     initializeWizard();
     initializeActions();
+
     initializeTokenValidation();
-    
-    $('#wpvtp-download-wp-content').on('click', function(e) {
-        e.preventDefault();
-        
-        const defaultName = 'wp-content-backup-' + new Date().toISOString().split('T')[0];
-        const zipName = prompt('File name for the zip export without ext:', defaultName);
-        
-        if (!zipName) {
-            return; // Usuario canceló
-        }
 
-        const button = $(this);
-        const originalText = button.text();
-        
-        button.text('Creanting ZIP...').prop('disabled', true);
+    $("#wpvtp-download-wp-content").on("click", function (e) {
+      e.preventDefault();
 
-        $.post(wpvtp_ajax.ajax_url, {
-            action: 'wpvtp_download_wp_content',
-            zip_name: zipName,
-            nonce: wpvtp_ajax.nonce
+      const defaultName =
+        "wp-content-backup-" + new Date().toISOString().split("T")[0];
+      const zipName = prompt(
+        "File name for the zip export without ext:",
+        defaultName
+      );
+
+      if (!zipName) {
+        return; // Usuario canceló
+      }
+
+      const button = $(this);
+      const originalText = button.text();
+
+      button.text("Creanting ZIP...").prop("disabled", true);
+
+      $.post(wpvtp_ajax.ajax_url, {
+        action: "wpvtp_download_wp_content",
+        zip_name: zipName,
+        nonce: wpvtp_ajax.nonce,
+      })
+        .done(function (response) {
+          if (response.success) {
+            showNotification(
+              "✅ ZIP created" +
+                response.data.filename +
+                " (" +
+                response.data.size +
+                ")",
+              "success"
+            );
+
+            // Descargar archivo automáticamente
+            window.location.href = response.data.download_url;
+          } else {
+            showNotification("❌ Error: " + response.data, "error");
+          }
         })
-        .done(function(response) {
-            if (response.success) {
-                showNotification('✅ ZIP created' + response.data.filename + ' (' + response.data.size + ')', 'success');
-                
-                // Descargar archivo automáticamente
-                window.location.href = response.data.download_url;
-            } else {
-                showNotification('❌ Error: ' + response.data, 'error');
-            }
+        .fail(function () {
+          showNotification("❌ Error on creating zip", "error");
         })
-        .fail(function() {
-            showNotification('❌ Error on creating zip', 'error');
-        })
-        .always(function() {
-            button.text(originalText).prop('disabled', false);
+        .always(function () {
+          button.text(originalText).prop("disabled", false);
         });
     });
-    
+
     // Reintentar commit
-    $(document).on('click', '.wpvtp-retry-commit', function() {
-        const button = $(this);
-        const commitId = button.data('id');
-        const originalText = button.text();
-        
-        button.text('Procesando...').prop('disabled', true);
-        
-        $.post(wpvtp_ajax.ajax_url, {
-            action: 'wpvtp_retry_commit',
-            commit_id: commitId,
-            nonce: wpvtp_ajax.nonce
+    $(document).on("click", ".wpvtp-retry-commit", function () {
+      const button = $(this);
+      const commitId = button.data("id");
+      const originalText = button.text();
+
+      button.text("Procesando...").prop("disabled", true);
+
+      $.post(wpvtp_ajax.ajax_url, {
+        action: "wpvtp_retry_commit",
+        commit_id: commitId,
+        nonce: wpvtp_ajax.nonce,
+      })
+        .done(function (response) {
+          if (response.success) {
+            showNotification("✅ " + response.message, "success");
+            location.reload();
+          } else {
+            showNotification("❌ " + response.error, "error");
+            button.text(originalText).prop("disabled", false);
+          }
         })
-        .done(function(response) {
-            if (response.success) {
-                showNotification('✅ ' + response.message, 'success');
-                location.reload();
-            } else {
-                showNotification('❌ ' + response.error, 'error');
-                button.text(originalText).prop('disabled', false);
-            }
-        })
-        .fail(function() {
-            showNotification('❌ Error de conexión', 'error');
-            button.text(originalText).prop('disabled', false);
+        .fail(function () {
+          showNotification("❌ Error de conexión", "error");
+          button.text(originalText).prop("disabled", false);
         });
     });
-    
+
     // Eliminar commit
-    $(document).on('click', '.wpvtp-delete-commit', function() {
-        if (!confirm('¿Eliminar este commit de la cola?')) return;
-        
-        const button = $(this);
-        const commitId = button.data('id');
-        
-        $.post(wpvtp_ajax.ajax_url, {
-            action: 'wpvtp_delete_commit',
-            commit_id: commitId,
-            nonce: wpvtp_ajax.nonce
-        })
-        .done(function(response) {
-            if (response.success) {
-                showNotification('✅ Commit eliminado', 'success');
-                location.reload();
-            } else {
-                showNotification('❌ Error al eliminar', 'error');
-            }
-        });
+    $(document).on("click", ".wpvtp-delete-commit", function () {
+      if (!confirm("¿Eliminar este commit de la cola?")) return;
+
+      const button = $(this);
+      const commitId = button.data("id");
+
+      $.post(wpvtp_ajax.ajax_url, {
+        action: "wpvtp_delete_commit",
+        commit_id: commitId,
+        nonce: wpvtp_ajax.nonce,
+      }).done(function (response) {
+        if (response.success) {
+          showNotification("✅ Commit eliminado", "success");
+          location.reload();
+        } else {
+          showNotification("❌ Error al eliminar", "error");
+        }
+      });
     });
 
     // Load organizations automatically if we are on the installation page
@@ -159,11 +235,11 @@
   function initializeWizard() {
     // Organization change
     $("#wpvtp-organization").on("change", function () {
-      const selectedOption = $(this).find('option:selected');
+      const selectedOption = $(this).find("option:selected");
       const owner = selectedOption.val();
-      const type = selectedOption.data('type');
+      const type = selectedOption.data("type");
 
-      debugLog('Selected Organization:', { owner, type });
+      debugLog("Selected Organization:", { owner, type });
 
       if (owner) {
         loadRepositories(owner, type);
@@ -184,7 +260,7 @@
         const repo = JSON.parse(repoData);
         selectedRepo = repo;
 
-        debugLog('Selected Repository:', repo);
+        debugLog("Selected Repository:", repo);
 
         // Show repository information
         showRepositoryInfo(repo);
@@ -205,11 +281,11 @@
     $("#wpvtp-repo-type").on("change", function () {
       const type = $(this).val();
       if (type && selectedRepo) {
-        debugLog('Selected Type:', type);
-        
+        debugLog("Selected Type:", type);
+
         // Save the type in the selectedRepo object
         selectedRepo.detected_type = type;
-        
+
         // Load branches
         loadBranches(selectedRepo.owner.login, selectedRepo.name);
         showStep("branch");
@@ -224,14 +300,14 @@
     $("#wpvtp-branch").on("change", function () {
       const branch = $(this).val();
       if (branch && selectedRepo) {
-        debugLog('Selected Branch:', branch);
-        
+        debugLog("Selected Branch:", branch);
+
         // Show custom name step
         showStep("custom-name");
-        
+
         // Suggest default name based on repo and branch
         suggestCustomName();
-        
+
         showInstallSummary();
         showStep("confirm");
       } else {
@@ -259,19 +335,28 @@
    */
   function suggestCustomName() {
     if (!selectedRepo) return;
-    
+
     const branch = $("#wpvtp-branch").val();
     const repoName = selectedRepo.name;
-    
+
     // Only suggest if it's not the main branch and it's a theme
-    if (selectedRepo.detected_type === 'theme' && 
-        branch && 
-        !['main', 'master'].includes(branch)) {
-      
-      const suggestedName = repoName + ' (' + branch.charAt(0).toUpperCase() + branch.slice(1) + ')';
-      $("#wpvtp-custom-name").attr('placeholder', 'E.g.: ' + suggestedName);
+    if (
+      selectedRepo.detected_type === "theme" &&
+      branch &&
+      !["main", "master"].includes(branch)
+    ) {
+      const suggestedName =
+        repoName +
+        " (" +
+        branch.charAt(0).toUpperCase() +
+        branch.slice(1) +
+        ")";
+      $("#wpvtp-custom-name").attr("placeholder", "E.g.: " + suggestedName);
     } else {
-      $("#wpvtp-custom-name").attr('placeholder', 'Leave empty to use the repository name');
+      $("#wpvtp-custom-name").attr(
+        "placeholder",
+        "Leave empty to use the repository name"
+      );
     }
   }
 
@@ -335,7 +420,7 @@
   /**
    * Disconnect from GitHub
    */
-  window.disconnectGitHub = function() {
+  window.disconnectGitHub = function () {
     if (
       !confirm(
         "Are you sure you want to disconnect from GitHub? You will lose access to private repositories."
@@ -344,7 +429,7 @@
       return;
     }
 
-    debugLog('Disconnecting from GitHub...');
+    debugLog("Disconnecting from GitHub...");
 
     $.post(wpvtp_ajax.ajax_url, {
       action: "wpvtp_disconnect_github",
@@ -372,7 +457,7 @@
   function loadOrganizations() {
     const select = $("#wpvtp-organization");
 
-    debugLog('Loading organizations...');
+    debugLog("Loading organizations...");
 
     select
       .html('<option value="">Loading organizations...</option>')
@@ -383,15 +468,13 @@
       nonce: wpvtp_ajax.nonce,
     })
       .done(function (response) {
-        debugLog('Organizations response:', response);
-        
+        debugLog("Organizations response:", response);
+
         if (response.success) {
           currentOrganizations = response.data;
           populateOrganizationSelect();
         } else {
-          select.html(
-            '<option value="">Error loading organizations</option>'
-          );
+          select.html('<option value="">Error loading organizations</option>');
           showNotification(
             "Error loading organizations: " + response.data,
             "error"
@@ -411,7 +494,10 @@
       })
       .fail(function () {
         select.html('<option value="">Connection error</option>');
-        showNotification("Connection error while loading organizations", "error");
+        showNotification(
+          "Connection error while loading organizations",
+          "error"
+        );
       })
       .always(function () {
         select.prop("disabled", false);
@@ -426,10 +512,11 @@
     let html = '<option value="">Select an organization or user...</option>';
 
     currentOrganizations.forEach(function (org) {
-      const type = org.type === 'Organization' ? 'org' : 'user';
-      const icon = org.type === 'Organization' ? '🏢' : '👤';
-      const label = org.login + (org.description ? ' - ' + org.description : '');
-      
+      const type = org.type === "Organization" ? "org" : "user";
+      const icon = org.type === "Organization" ? "🏢" : "👤";
+      const label =
+        org.login + (org.description ? " - " + org.description : "");
+
       html += `<option value="${org.login}" data-type="${type}">${icon} ${label}</option>`;
     });
 
@@ -443,7 +530,7 @@
   function loadRepositories(owner, type) {
     const select = $("#wpvtp-repository");
 
-    debugLog('Loading repositories for:', { owner, type });
+    debugLog("Loading repositories for:", { owner, type });
 
     select
       .html('<option value="">Loading repositories...</option>')
@@ -456,14 +543,16 @@
       nonce: wpvtp_ajax.nonce,
     })
       .done(function (response) {
-        debugLog('Repositories response:', response);
-        
+        debugLog("Repositories response:", response);
+
         if (response.success) {
           currentRepositories = response.data;
           populateRepositorySelect();
-          
+
           // Count private repos
-          const privateCount = currentRepositories.filter(r => r.private).length;
+          const privateCount = currentRepositories.filter(
+            (r) => r.private
+          ).length;
           if (privateCount > 0) {
             debugLog(`✅ ${privateCount} private repository(ies) found`);
           }
@@ -477,7 +566,10 @@
       })
       .fail(function () {
         select.html('<option value="">Connection error</option>');
-        showNotification("Connection error while loading repositories", "error");
+        showNotification(
+          "Connection error while loading repositories",
+          "error"
+        );
       })
       .always(function () {
         select.prop("disabled", false);
@@ -490,7 +582,7 @@
    */
   function populateRepositorySelect() {
     const select = $("#wpvtp-repository");
-    
+
     if (currentRepositories.length === 0) {
       select.html('<option value="">No repositories available</option>');
       return;
@@ -508,38 +600,42 @@
 
     sortedRepos.forEach(function (repo) {
       // Visual indicator for private repos
-      const privacyIcon = repo.private ? '🔒 ' : '🌐 ';
+      const privacyIcon = repo.private ? "🔒 " : "🌐 ";
       const repoData = JSON.stringify(repo);
-      const description = repo.description ? ' - ' + repo.description.substring(0, 50) : '';
-      
+      const description = repo.description
+        ? " - " + repo.description.substring(0, 50)
+        : "";
+
       html += `<option value='${repoData}'>${privacyIcon}${repo.name}${description}</option>`;
     });
 
     select.html(html);
-    
+
     // Show message if there are private repos
-    const privateCount = currentRepositories.filter(r => r.private).length;
+    const privateCount = currentRepositories.filter((r) => r.private).length;
     if (privateCount > 0) {
       showNotification(
         `✅ ${privateCount} private repository(ies) available`,
         "success"
       );
     }
-    
-    debugLog(`${currentRepositories.length} repositories loaded (${privateCount} private)`);
+
+    debugLog(
+      `${currentRepositories.length} repositories loaded (${privateCount} private)`
+    );
   }
 
   /**
    * Show selected repository information
    */
   function showRepositoryInfo(repo) {
-    const privacyBadge = repo.private 
+    const privacyBadge = repo.private
       ? '<span style="background: #d63638; color: white; padding: 3px 8px; border-radius: 3px; font-size: 11px; margin-left: 8px;">🔒 PRIVATE</span>'
       : '<span style="background: #00a32a; color: white; padding: 3px 8px; border-radius: 3px; font-size: 11px; margin-left: 8px;">🌐 PUBLIC</span>';
-    
-    const languageBadge = repo.language 
+
+    const languageBadge = repo.language
       ? `<span style="background: #f0f0f0; padding: 3px 8px; border-radius: 3px; font-size: 11px; margin-left: 8px;">${repo.language}</span>`
-      : '';
+      : "";
 
     $("#repo-description").html(
       (repo.description || "No description") + privacyBadge + languageBadge
@@ -554,7 +650,7 @@
   function loadBranches(owner, repo) {
     const select = $("#wpvtp-branch");
 
-    debugLog('Loading branches for:', { owner, repo });
+    debugLog("Loading branches for:", { owner, repo });
 
     select
       .html('<option value="">Loading branches...</option>')
@@ -567,8 +663,8 @@
       nonce: wpvtp_ajax.nonce,
     })
       .done(function (response) {
-        debugLog('Branches response:', response);
-        
+        debugLog("Branches response:", response);
+
         if (response.success) {
           currentBranches = response.data;
           populateBranchSelect();
@@ -591,7 +687,7 @@
    */
   function populateBranchSelect() {
     const select = $("#wpvtp-branch");
-    
+
     if (currentBranches.length === 0) {
       select.html('<option value="">No branches available</option>');
       return;
@@ -601,9 +697,9 @@
 
     currentBranches.forEach(function (branch) {
       // Highlight main branch
-      const isMain = branch.name === 'main' || branch.name === 'master';
-      const star = isMain ? '⭐ ' : '';
-      
+      const isMain = branch.name === "main" || branch.name === "master";
+      const star = isMain ? "⭐ " : "";
+
       html += `<option value="${branch.name}">${star}${branch.name}</option>`;
     });
 
@@ -620,16 +716,19 @@
     const branch = $("#wpvtp-branch").val();
     const customName = $("#wpvtp-custom-name").val().trim();
     const finalName = customName || selectedRepo.name;
-    
-    const privacyBadge = selectedRepo.private ? '🔒 Private' : '🌐 Public';
-    const typeLabel = selectedRepo.detected_type === 'theme' ? '🎨 Theme' : '🔌 Plugin';
+
+    const privacyBadge = selectedRepo.private ? "🔒 Private" : "🌐 Public";
+    const typeLabel =
+      selectedRepo.detected_type === "theme" ? "🎨 Theme" : "🔌 Plugin";
 
     const summary = `
       <h4>Installation Summary</h4>
-      <p><strong>Repository:</strong> ${selectedRepo.full_name} (${privacyBadge})</p>
+      <p><strong>Repository:</strong> ${
+        selectedRepo.full_name
+      } (${privacyBadge})</p>
       <p><strong>Branch:</strong> ${branch}</p>
       <p><strong>Type:</strong> ${typeLabel}</p>
-      ${customName ? `<p><strong>Custom Name:</strong> ${customName}</p>` : ''}
+      ${customName ? `<p><strong>Custom Name:</strong> ${customName}</p>` : ""}
       <p><strong>Final Name:</strong> ${finalName}</p>
     `;
 
@@ -647,10 +746,10 @@
     const button = $("#wpvtp-install-form button[type='submit']");
     const resultsDiv = $("#wpvtp-install-results");
 
-    debugLog('Starting installation...', {
+    debugLog("Starting installation...", {
       repo: selectedRepo.full_name,
       branch: branch,
-      customName: customName
+      customName: customName,
     });
 
     button.addClass("loading").prop("disabled", true);
@@ -666,42 +765,84 @@
       nonce: wpvtp_ajax.nonce,
     })
       .done(function (response) {
-        debugLog('Installation response:', response);
-        
-        if (response.success) {
-          resultsDiv
-            .addClass("success")
-            .html(
-              `
-                <h3>✅ Installation Successful</h3>
-                <p>${response.message}</p>
-                <p style="margin-top: 15px;">
-                  <a href="${wpvtp_ajax.admin_url}admin.php?page=wp-versions-themes-plugins" class="button button-primary">View Repositories</a>
-                </p>
-              `
-            )
-            .show()
-            .addClass("wpvtp-fade-in");
+        debugLog("Installation response:", response);
 
-          // Reset form
-          $("#wpvtp-install-form")[0].reset();
-          hideAllStepsExceptFirst();
+        if (response.success && response.job_id) {
+          // Usar progress tracking
+          startProgressTracking(
+            response.job_id,
+            function () {
+              // onComplete
+              resultsDiv
+                .addClass("success")
+                .html(
+                  `
+                    <h3>✅ Installation Successful</h3>
+                    <p>${response.message}</p>
+                    <p style="margin-top: 15px;">
+                      <a href="${wpvtp_ajax.admin_url}admin.php?page=wp-versions-themes-plugins" class="button button-primary">View Repositories</a>
+                    </p>
+                  `
+                )
+                .show()
+                .addClass("wpvtp-fade-in");
+
+              // Reset form
+              $("#wpvtp-install-form")[0].reset();
+              hideAllStepsExceptFirst();
+              button.removeClass("loading").prop("disabled", false);
+            },
+            function (error) {
+              // onError
+              resultsDiv
+                .addClass("error")
+                .html(
+                  `
+                    <h3>❌ Installation Error</h3>
+                    <p>${error}</p>
+                  `
+                )
+                .show()
+                .addClass("wpvtp-fade-in");
+              button.removeClass("loading").prop("disabled", false);
+            }
+          );
         } else {
-          resultsDiv
-            .addClass("error")
-            .html(
-              `
-                <h3>❌ Installation Error</h3>
-                <p>${response.error}</p>
-              `
-            )
-            .show()
-            .addClass("wpvtp-fade-in");
+          // Fallback si no hay job_id
+          if (response.success) {
+            resultsDiv
+              .addClass("success")
+              .html(
+                `
+                  <h3>✅ Installation Successful</h3>
+                  <p>${response.message}</p>
+                  <p style="margin-top: 15px;">
+                    <a href="${wpvtp_ajax.admin_url}admin.php?page=wp-versions-themes-plugins" class="button button-primary">View Repositories</a>
+                  </p>
+                `
+              )
+              .show()
+              .addClass("wpvtp-fade-in");
+            $("#wpvtp-install-form")[0].reset();
+            hideAllStepsExceptFirst();
+          } else {
+            resultsDiv
+              .addClass("error")
+              .html(
+                `
+                  <h3>❌ Installation Error</h3>
+                  <p>${response.error}</p>
+                `
+              )
+              .show()
+              .addClass("wpvtp-fade-in");
+          }
+          button.removeClass("loading").prop("disabled", false);
         }
       })
       .fail(function (xhr, status, error) {
-        debugLog('Installation error:', { xhr, status, error });
-        
+        debugLog("Installation error:", { xhr, status, error });
+
         resultsDiv
           .addClass("error")
           .html(
@@ -712,8 +853,7 @@
           )
           .show()
           .addClass("wpvtp-fade-in");
-      })
-      .always(function () {
+
         button.removeClass("loading").prop("disabled", false);
       });
   }
@@ -723,21 +863,58 @@
    */
   function updateRepository(localPath, button) {
     const originalText = button.text();
-    button.addClass("loading").prop("disabled", true).text('Updating...'); // Manual text change
+    button.addClass("loading").prop("disabled", true).text("Updating...");
 
-    debugLog('Updating repository:', localPath);
+    debugLog("Updating repository:", localPath);
 
     $.post(wpvtp_ajax.ajax_url, {
       action: "wpvtp_update_repository",
-      local_path: localPath,
+      identifier: localPath,
       nonce: wpvtp_ajax.nonce,
     })
       .done(function (response) {
-        if (response.success) {
-          showNotification("✅ " + response.message, "success");
-          setTimeout(() => location.reload(), 1500);
+        if (response.success && response.job_id) {
+          // Crear contenedor para progress bar en la tabla
+          const row = button.closest("tr");
+          const progressContainer = $(
+            '<tr class="wpvtp-progress-row"><td colspan="6"></td></tr>'
+          );
+          row.after(progressContainer);
+
+          startProgressTracking(
+            response.job_id,
+            function () {
+              // onComplete
+              showNotification("✅ " + response.message, "success");
+              button
+                .removeClass("loading")
+                .prop("disabled", false)
+                .text(originalText);
+              setTimeout(() => location.reload(), 1500);
+            },
+            function (error) {
+              // onError
+              showNotification("❌ " + error, "error");
+              button
+                .removeClass("loading")
+                .prop("disabled", false)
+                .text(originalText);
+              progressContainer.remove();
+            },
+            progressContainer.find("td")
+          );
         } else {
-          showNotification("❌ " + response.error, "error");
+          // Fallback sin job_id
+          if (response.success) {
+            showNotification("✅ " + response.message, "success");
+            setTimeout(() => location.reload(), 1500);
+          } else {
+            showNotification("❌ " + response.error, "error");
+          }
+          button
+            .removeClass("loading")
+            .prop("disabled", false)
+            .text(originalText);
         }
       })
       .fail(function () {
@@ -745,9 +922,10 @@
           "❌ Connection error while updating repository",
           "error"
         );
-      })
-      .always(function () {
-        button.removeClass("loading").prop("disabled", false).text(originalText);
+        button
+          .removeClass("loading")
+          .prop("disabled", false)
+          .text(originalText);
       });
   }
 
@@ -755,11 +933,11 @@
    * Remove repository
    */
   function removeRepository(localPath) {
-    debugLog('Removing repository:', localPath);
-    
+    debugLog("Removing repository:", localPath);
+
     $.post(wpvtp_ajax.ajax_url, {
       action: "wpvtp_remove_repository",
-      local_path: localPath,
+      identifier: localPath, // Cambiar local_path por identifier
       nonce: wpvtp_ajax.nonce,
     })
       .done(function (response) {
@@ -823,7 +1001,8 @@
         if (response.success) {
           let html = '<option value="">Select a branch...</option>';
           response.data.forEach(function (branch) {
-            const star = (branch.name === 'main' || branch.name === 'master') ? '⭐ ' : '';
+            const star =
+              branch.name === "main" || branch.name === "master" ? "⭐ " : "";
             html += `<option value="${branch.name}">${star}${branch.name}</option>`;
           });
           select.html(html);
@@ -852,24 +1031,64 @@
    * Switch repository branch
    */
   function switchBranch(localPath, newBranch) {
-    debugLog('Switching branch:', { localPath, newBranch });
-    
+    debugLog("Switching branch:", { localPath, newBranch });
+
+    // Buscar el botón que disparó esto para deshabilitarlo
+    const button = $(`[data-path="${localPath}"]`)
+      .closest("tr")
+      .find(".wpvtp-switch-branch");
+    if (button.length) {
+      button.prop("disabled", true);
+    }
+
     $.post(wpvtp_ajax.ajax_url, {
       action: "wpvtp_switch_branch",
-      local_path: localPath,
+      identifier: localPath, // Cambiar local_path por identifier
       new_branch: newBranch,
       nonce: wpvtp_ajax.nonce,
     })
       .done(function (response) {
-        if (response.success) {
-          showNotification("✅ " + response.message, "success");
-          setTimeout(() => location.reload(), 1500);
+        if (response.success && response.job_id) {
+          // Crear contenedor para progress bar
+          const row = button.length ? button.closest("tr") : null;
+          let progressContainer = null;
+
+          if (row && row.length) {
+            progressContainer = $(
+              '<tr class="wpvtp-progress-row"><td colspan="6"></td></tr>'
+            );
+            row.after(progressContainer);
+          }
+
+          startProgressTracking(
+            response.job_id,
+            function () {
+              // onComplete
+              showNotification("✅ " + response.message, "success");
+              setTimeout(() => location.reload(), 1500);
+            },
+            function (error) {
+              // onError
+              showNotification("❌ " + error, "error");
+              if (progressContainer) progressContainer.remove();
+              if (button.length) button.prop("disabled", false);
+            },
+            progressContainer ? progressContainer.find("td") : null
+          );
         } else {
-          showNotification("❌ " + response.error, "error");
+          // Fallback sin job_id
+          if (response.success) {
+            showNotification("✅ " + response.message, "success");
+            setTimeout(() => location.reload(), 1500);
+          } else {
+            showNotification("❌ " + response.error, "error");
+            if (button.length) button.prop("disabled", false);
+          }
         }
       })
       .fail(function () {
         showNotification("❌ Connection error while switching branch", "error");
+        if (button.length) button.prop("disabled", false);
       });
   }
 
@@ -989,5 +1208,4 @@
       $(document).off("keyup.wpvtp-modal");
     }, 300);
   };
-
 })(jQuery);

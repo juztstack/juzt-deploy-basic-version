@@ -29,18 +29,21 @@ class WPVTP_Repo_Manager
     {
         global $wpdb;
         $this->table_name = $wpdb->prefix . 'github_repos';
+
+        require_once WPVTP_PLUGIN_DIR . 'includes/class-git-interface.php';
+        require_once WPVTP_PLUGIN_DIR . 'includes/class-git-cli.php';
+        require_once WPVTP_PLUGIN_DIR . 'includes/class-git-api.php';
+
         add_action('wpvtp_queue_commit', array($this, 'handle_queue_commit_action'), 10, 2);
-        add_filter('wpvtp_queue_commit', array($this, 'handle_queue_commit_filter'), 10, 3);
-        
+        add_filter('wpvtp_queue_commit', array($this, 'handle_queue_commit_filter'), 10, 4);
     }
-    
+
     // AGREGAR nuevo método:
-    public function handle_queue_commit_filter($result, $theme_path, $commit_message)
+    public function handle_queue_commit_filter($result, $theme_path, $commit_message, $file_path = null)
     {
-        // Los parámetros llegan invertidos, corregir el orden:
-        return $this->queue_commit($theme_path, $commit_message);
+        return $this->queue_commit($theme_path, $commit_message, $file_path);
     }
-        
+
     public function handle_queue_commit_action($theme_path, $commit_message)
     {
         $this->queue_commit($theme_path, $commit_message);
@@ -72,6 +75,75 @@ class WPVTP_Repo_Manager
         exec('git --version 2>&1', $output);
 
         return isset($output[0]) ? $output[0] : false;
+    }
+
+    /**
+     * Detectar modo Git disponible
+     */
+    public function detect_git_mode()
+    {
+        $mode = 'api'; // Por defecto API
+
+        // Verificar si exec está disponible
+        if (!function_exists('exec')) {
+            update_option('wpvtp_git_mode', 'api');
+            update_option('wpvtp_git_mode_reason', 'exec() function disabled');
+            return 'api';
+        }
+
+        // Verificar si exec puede ejecutarse
+        $disabled = explode(',', ini_get('disable_functions'));
+        if (in_array('exec', $disabled)) {
+            update_option('wpvtp_git_mode', 'api');
+            update_option('wpvtp_git_mode_reason', 'exec() in disable_functions');
+            return 'api';
+        }
+
+        // Verificar si git está instalado
+        $output = array();
+        $return_var = 1;
+        @exec('git --version 2>&1', $output, $return_var);
+
+        if ($return_var === 0) {
+            $mode = 'cli';
+            update_option('wpvtp_git_mode_reason', 'Git CLI available: ' . implode(' ', $output));
+        } else {
+            update_option('wpvtp_git_mode_reason', 'Git command not found');
+        }
+
+        update_option('wpvtp_git_mode', $mode);
+        return $mode;
+    }
+
+    /**
+     * Obtener modo Git actual
+     */
+    public function get_git_mode()
+    {
+        $force_mode = get_option('wpvtp_force_git_mode', 'auto');
+
+        if ($force_mode !== 'auto') {
+            return $force_mode;
+        }
+
+        $detected_mode = get_option('wpvtp_git_mode');
+
+        if (!$detected_mode) {
+            $detected_mode = $this->detect_git_mode();
+        }
+
+        return $detected_mode;
+    }
+
+    private function get_git_instance()
+    {
+        $mode = $this->get_git_mode();
+
+        if ($mode === 'cli') {
+            return new WPVTP_Git_CLI();
+        } else {
+            return new WPVTP_Git_API();
+        }
     }
 
     /**
@@ -128,19 +200,19 @@ class WPVTP_Repo_Manager
     public function migrate_old_paths()
     {
         global $wpdb;
-        
+
         // Primero verificar si la columna folder_name existe
         $column_exists = $wpdb->get_results(
             "SHOW COLUMNS FROM {$this->table_name} LIKE 'folder_name'"
         );
-        
+
         // Si no existe, agregarla
         if (empty($column_exists)) {
             $wpdb->query(
                 "ALTER TABLE {$this->table_name} ADD COLUMN folder_name varchar(255) NULL AFTER local_path"
             );
         }
-        
+
         // Migrar datos existentes
         $repos = $wpdb->get_results(
             "SELECT * FROM {$this->table_name} WHERE folder_name IS NULL OR folder_name = ''",
@@ -150,7 +222,7 @@ class WPVTP_Repo_Manager
         foreach ($repos as $repo) {
             // Extraer folder_name del local_path
             $folder_name = basename($repo['local_path']);
-            
+
             $wpdb->update(
                 $this->table_name,
                 array('folder_name' => $folder_name),
@@ -159,7 +231,7 @@ class WPVTP_Repo_Manager
                 array('%d')
             );
         }
-        
+
         return array(
             'success' => true,
             'migrated' => count($repos),
@@ -170,108 +242,94 @@ class WPVTP_Repo_Manager
     /**
      * Clonar repositorio con nombre personalizado
      */
-    public function clone_repository($repo_url, $branch, $type, $repo_name, $custom_name = '', $access_token = '')
+    public function clone_repository($repo_url, $branch, $type, $repo_name, $custom_name = '', $access_token = '', $job_id = null)
     {
-        if (!$this->is_git_available()) {
+        require_once WPVTP_PLUGIN_DIR . 'includes/class-progress-tracker.php';
+        $progress = new WPVTP_Progress_Tracker($job_id);
+
+        $progress->update('validating', 'Validando configuración...', 10);
+
+        $git = $this->get_git_instance();
+
+        if (!$git->is_available()) {
+            $progress->error('Git no está disponible en el sistema');
             return array(
                 'success' => false,
                 'error' => __('Git no está disponible en el sistema', 'wp-versions-themes-plugins')
             );
         }
 
-        // Usar nombre personalizado si se proporciona, sino usar nombre del repo
         $display_name = !empty($custom_name) ? $custom_name : $repo_name;
-
-        // Generar handle para la carpeta (siempre basado en el nombre del repo para consistencia)
-        // Si hay nombre personalizado, usarlo para la carpeta también
         $folder_name = !empty($custom_name) ? $custom_name : $repo_name;
         $folder_handle = $this->generate_folder_handle($folder_name, $branch);
 
-        // Determinar ruta de destino usando el método resolve
         $destination = $this->resolve_local_path($folder_handle, $type);
 
-        // Verificar si ya existe
         if (is_dir($destination)) {
+            $progress->error('El directorio ya existe');
             return array(
                 'success' => false,
                 'error' => sprintf(__('El directorio %s ya existe', 'wp-versions-themes-plugins'), $folder_handle)
             );
         }
-		
-		// ✅ NUEVO: Agregar token a la URL para repos privados
-        $clone_url = $this->add_token_to_url($repo_url, $access_token);
 
-        // Ejecutar git clone
-        $output = array();
-        $return_var = 0;
+        $progress->update('downloading', 'Descargando repositorio...', 30);
 
-        $command = sprintf(
-            'git clone -b %s %s %s 2>&1',
-            escapeshellarg($branch),
-            escapeshellarg($clone_url),
-            escapeshellarg($destination)
-        );
-        
-        //var_dump($command);
+        $result = $git->clone_repository($repo_url, $branch, $destination, $access_token);
 
-        exec($command, $output, $return_var);
-
-        if ($return_var !== 0) {
-            // Limpiar directorio si se creó parcialmente
+        if (!$result['success']) {
             if (is_dir($destination)) {
                 $this->remove_directory($destination);
             }
-
+            $progress->error('Error al clonar: ' . $result['error']);
             return array(
                 'success' => false,
-                'error' => __('Error al clonar repositorio: ', 'wp-versions-themes-plugins') . implode("\n", $output)
+                'error' => __('Error al clonar repositorio: ', 'wp-versions-themes-plugins') . $result['error']
             );
         }
 
-        // Verificar que el clone fue exitoso
-        if (!is_dir($destination . '/.git')) {
-            return array(
-                'success' => false,
-                'error' => __('El repositorio se clonó pero no contiene información de Git', 'wp-versions-themes-plugins')
-            );
-        }
-		
-		// ✅ NUEVO: Configurar credenciales para futuras operaciones git
-        if (!empty($access_token)) {
-            $this->configure_git_credentials($destination, $access_token);
-        }
+        $progress->update('configuring', 'Configurando archivos...', 70);
 
-        // Si es tema, actualizar nombre en style.css
         if ($type === 'theme') {
             $this->update_theme_name($destination, $display_name, $branch);
         }
 
-        // Si es plugin, actualizar nombre en el archivo principal del plugin
         if ($type === 'plugin' && !empty($custom_name)) {
             $this->update_plugin_name($destination, $display_name, $repo_name);
         }
 
-        // Guardar en base de datos - AHORA GUARDA FOLDER_NAME EN LUGAR DE PATH ABSOLUTO
+        $progress->update('saving', 'Guardando en base de datos...', 90);
+
         $this->save_repo_to_database($display_name, $repo_url, $folder_handle, $branch, $type);
+
+        $progress->complete('Repositorio clonado exitosamente');
 
         return array(
             'success' => true,
             'message' => __('Repositorio clonado exitosamente', 'wp-versions-themes-plugins'),
             'path' => $destination,
             'handle' => $folder_handle,
-            'display_name' => $display_name
+            'display_name' => $display_name,
+            'job_id' => $progress->get_job_id()
         );
     }
 
     /**
      * Actualizar repositorio (git pull)
      */
-    public function update_repository($identifier, $access_token = '')
+    public function update_repository($identifier, $access_token = '', $job_id = null)
     {
-        // Resolver el path real desde el identificador
+        require_once WPVTP_PLUGIN_DIR . 'includes/class-progress-tracker.php';
+        $progress = new WPVTP_Progress_Tracker($job_id);
+
+        $progress->update('validating', 'Validando repositorio...', 10);
+
+        $git = $this->get_git_instance();
+
         $repo_info = $this->get_repo_by_identifier($identifier);
-        
+
         if (!$repo_info) {
+            $progress->error('No se encontró el repositorio');
             return array(
                 'success' => false,
                 'error' => __('No se encontró el repositorio', 'wp-versions-themes-plugins')
@@ -280,57 +338,47 @@ class WPVTP_Repo_Manager
 
         $local_path = $this->resolve_local_path($repo_info['folder_name'], $repo_info['repo_type']);
 
-        if (!is_dir($local_path . '/.git')) {
+        $progress->update('updating', 'Descargando actualizaciones...', 50);
+
+        $result = $git->update_repository($local_path, $access_token);
+
+        if (!$result['success']) {
+            $progress->error('Error al actualizar: ' . $result['error']);
             return array(
                 'success' => false,
-                'error' => __('El directorio no contiene un repositorio Git válido', 'wp-versions-themes-plugins')
-            );
-        }
-		
-		// ✅ NUEVO: Actualizar credenciales si hay token
-        if (!empty($access_token)) {
-            $this->configure_git_credentials($local_path, $access_token);
-        }
-
-        $output = array();
-        $return_var = 0;
-
-        // Cambiar al directorio del repositorio
-        $old_cwd = getcwd();
-        chdir($local_path);
-
-        // Ejecutar git pull
-        exec('git pull origin 2>&1', $output, $return_var);
-
-        // Restaurar directorio de trabajo
-        chdir($old_cwd);
-
-        if ($return_var !== 0) {
-            return array(
-                'success' => false,
-                'error' => __('Error al actualizar repositorio: ', 'wp-versions-themes-plugins') . implode("\n", $output)
+                'error' => __('Error al actualizar repositorio: ', 'wp-versions-themes-plugins') . $result['error']
             );
         }
 
-        // Actualizar timestamp en base de datos
+        $progress->update('saving', 'Guardando cambios...', 90);
+
         $this->update_repo_timestamp($repo_info['folder_name'], $repo_info['repo_type']);
+
+        $progress->complete('Repositorio actualizado exitosamente');
 
         return array(
             'success' => true,
             'message' => __('Repositorio actualizado exitosamente', 'wp-versions-themes-plugins'),
-            'output' => $output
+            'job_id' => $progress->get_job_id()
         );
     }
 
     /**
      * Cambiar rama (git checkout)
      */
-    public function switch_branch($identifier, $new_branch)
+    public function switch_branch($identifier, $new_branch, $job_id = null)
     {
-        // Resolver el path real desde el identificador
+        require_once WPVTP_PLUGIN_DIR . 'includes/class-progress-tracker.php';
+        $progress = new WPVTP_Progress_Tracker($job_id);
+
+        $progress->update('validating', 'Validando rama...', 10);
+
+        $git = $this->get_git_instance();
+
         $repo_info = $this->get_repo_by_identifier($identifier);
-        
+
         if (!$repo_info) {
+            $progress->error('No se encontró el repositorio');
             return array(
                 'success' => false,
                 'error' => __('No se encontró el repositorio', 'wp-versions-themes-plugins')
@@ -339,59 +387,30 @@ class WPVTP_Repo_Manager
 
         $local_path = $this->resolve_local_path($repo_info['folder_name'], $repo_info['repo_type']);
 
-        if (!is_dir($local_path . '/.git')) {
+        $access_token = get_option('wpvtp_oauth_token');
+
+        $progress->update('switching', 'Cambiando a rama ' . $new_branch . '...', 50);
+
+        $result = $git->switch_branch($local_path, $new_branch, $access_token);
+
+        if (!$result['success']) {
+            $progress->error('Error al cambiar rama: ' . $result['error']);
             return array(
                 'success' => false,
-                'error' => __('El directorio no contiene un repositorio Git válido', 'wp-versions-themes-plugins')
+                'error' => __('Error al cambiar rama: ', 'wp-versions-themes-plugins') . $result['error']
             );
         }
 
-        $output = array();
-        $return_var = 0;
+        $progress->update('saving', 'Guardando cambios...', 90);
 
-        // Cambiar al directorio del repositorio
-        $old_cwd = getcwd();
-        chdir($local_path);
-
-        // Fetch para obtener ramas remotas actualizadas
-        exec('git fetch origin 2>&1', $output, $return_var);
-
-        if ($return_var !== 0) {
-            chdir($old_cwd);
-            return array(
-                'success' => false,
-                'error' => __('Error al obtener ramas remotas: ', 'wp-versions-themes-plugins') . implode("\n", $output)
-            );
-        }
-
-        // Verificar si la rama existe localmente
-        exec('git branch --list ' . escapeshellarg($new_branch) . ' 2>&1', $branch_check);
-        $branch_exists_locally = !empty($branch_check);
-
-        // Cambiar a la rama
-        if ($branch_exists_locally) {
-            exec('git checkout ' . escapeshellarg($new_branch) . ' 2>&1', $output, $return_var);
-        } else {
-            exec('git checkout -b ' . escapeshellarg($new_branch) . ' origin/' . escapeshellarg($new_branch) . ' 2>&1', $output, $return_var);
-        }
-
-        // Restaurar directorio de trabajo
-        chdir($old_cwd);
-
-        if ($return_var !== 0) {
-            return array(
-                'success' => false,
-                'error' => __('Error al cambiar rama: ', 'wp-versions-themes-plugins') . implode("\n", $output)
-            );
-        }
-
-        // Actualizar rama actual en base de datos
         $this->update_repo_branch($repo_info['folder_name'], $repo_info['repo_type'], $new_branch);
+
+        $progress->complete('Cambiado a rama ' . $new_branch . ' exitosamente');
 
         return array(
             'success' => true,
             'message' => sprintf(__('Cambiado a rama %s exitosamente', 'wp-versions-themes-plugins'), $new_branch),
-            'output' => $output
+            'job_id' => $progress->get_job_id()
         );
     }
 
@@ -400,27 +419,17 @@ class WPVTP_Repo_Manager
      */
     public function get_current_branch($identifier)
     {
+        $git = $this->get_git_instance();
+
         $repo_info = $this->get_repo_by_identifier($identifier);
-        
+
         if (!$repo_info) {
             return false;
         }
 
         $local_path = $this->resolve_local_path($repo_info['folder_name'], $repo_info['repo_type']);
 
-        if (!is_dir($local_path . '/.git')) {
-            return false;
-        }
-
-        $output = array();
-        $old_cwd = getcwd();
-        chdir($local_path);
-
-        exec('git branch --show-current 2>&1', $output);
-
-        chdir($old_cwd);
-
-        return isset($output[0]) ? trim($output[0]) : false;
+        return $git->get_current_branch($local_path);
     }
 
     /**
@@ -480,7 +489,7 @@ class WPVTP_Repo_Manager
             // Resolver el path actual del entorno
             $local_path = $this->resolve_local_path($repo['folder_name'], $repo['repo_type']);
             $repo['local_path'] = $local_path; // Para compatibilidad con el frontend
-            
+
             // Verificar existencia
             $repo['exists'] = is_dir($local_path);
             $repo['has_git'] = is_dir($local_path . '/.git');
@@ -505,7 +514,7 @@ class WPVTP_Repo_Manager
         global $wpdb;
 
         $repo_info = $this->get_repo_by_identifier($identifier);
-        
+
         if (!$repo_info) {
             return array(
                 'success' => false,
@@ -758,83 +767,43 @@ class WPVTP_Repo_Manager
         return $result;
     }
 
-    public function commit_and_push_changes($identifier, $message = 'Cambios automáticos desde TemplateBuilder')
+    public function commit_and_push_changes($identifier, $message = 'Cambios automáticos desde TemplateBuilder', $file_path = null)
     {
-        // Si $identifier es una ruta completa, usarla directamente
+        $git = $this->get_git_instance();
+
         if (strpos($identifier, '/') !== false && is_dir($identifier)) {
             $local_path = $identifier;
         } else {
-            // Si no, buscar por identifier
             $repo_info = $this->get_repo_by_identifier($identifier);
-            
+
             if (!$repo_info) {
                 return ['success' => false, 'error' => 'No se encontró el repositorio.'];
             }
-    
+
             $local_path = $this->resolve_local_path($repo_info['folder_name'], $repo_info['repo_type']);
         }
-    
-        if (!$this->is_git_available() || !is_dir($local_path . '/.git')) {
-            return ['success' => false, 'error' => 'No es un repositorio Git válido.'];
+
+        $access_token = get_option('wpvtp_oauth_token');
+
+        if (empty($access_token)) {
+            return ['success' => false, 'error' => 'Access token required'];
         }
-    
-        $old_cwd = getcwd();
-        chdir($local_path);
-    
-        // Configurar identidad del GitHub App Bot
-        $github_app_id = get_option('wpvtp_github_app_id', '1953130');
-        $github_app_name = get_option('wpvtp_github_app_name', 'wordpress-theme-versions');
-        
-        exec('git config user.name "' . $github_app_name . '[bot]"');
-        exec('git config user.email "' . $github_app_id . '+' . $github_app_name . '[bot]@users.noreply.github.com"');
-    
-        exec('git add -A');
-    
-        $output = [];
-        $return_var = 0;
-        $command = sprintf('git commit -m %s', escapeshellarg($message));
-        exec($command, $output, $return_var);
-    
-        if ($return_var !== 0) {
-            chdir($old_cwd);
-            if (strpos(implode("\n", $output), 'nothing to commit') !== false) {
-                return ['success' => true, 'message' => 'No hay cambios para registrar.'];
-            }
-            return ['success' => false, 'error' => 'Error al registrar commit: ' . implode("\n", $output)];
+
+        // Si no se especifica archivo, agregar todos los cambios (solo CLI)
+        if (!$file_path && $this->get_git_mode() === 'cli') {
+            $file_path = '.';
         }
-    
-        // Obtener rama actual
-        $branch_output = [];
-        exec('git branch --show-current 2>&1', $branch_output);
-        $current_branch = isset($branch_output[0]) ? trim($branch_output[0]) : 'main';
-        
-        // Asegurar que el remote tiene el token
-        $this->configure_push_authentication($local_path);
-        
-        // Debug: verificar URL del remote
-        $remote_check = [];
-        exec('git remote get-url origin 2>&1', $remote_check);
-        error_log('WPVTP - Remote URL: ' . print_r($remote_check, true));
-        
-        $output = [];
-        $return_var = 0;
-        $command = sprintf('git push origin %s 2>&1', escapeshellarg($current_branch));
-        exec($command, $output, $return_var);
-        
-        chdir($old_cwd);
-        
-        // Log del resultado del push
-        error_log('WPVTP - Push return code: ' . $return_var);
-        error_log('WPVTP - Push output: ' . print_r($output, true));
-        
-        if ($return_var !== 0) {
-            return ['success' => false, 'error' => 'Error al empujar los cambios: ' . implode("\n", $output)];
+
+        if (!$file_path) {
+            return ['success' => false, 'error' => 'File path required for API mode'];
         }
-        
-        return ['success' => true, 'message' => 'Cambios registrados y empujados exitosamente.'];
+
+        $result = $git->commit_and_push($local_path, $file_path, $message, $access_token);
+
+        return $result;
     }
-	
-	/**
+
+    /**
      * NUEVO: Agregar token a URL de GitHub para repos privados
      */
     private function add_token_to_url($repo_url, $access_token)
@@ -867,7 +836,7 @@ class WPVTP_Repo_Manager
 
         // Configurar credential helper para almacenar el token
         exec('git config credential.helper store');
-        
+
         // Configurar el token en el remote origin
         $remote_url = $this->get_remote_url($repo_path);
         if ($remote_url) {
@@ -897,7 +866,7 @@ class WPVTP_Repo_Manager
 
         return isset($output[0]) ? trim($output[0]) : false;
     }
-    
+
     /**
      * Crear ZIP de wp-content
      * 
@@ -908,7 +877,7 @@ class WPVTP_Repo_Manager
     {
         // Sanitizar nombre
         $zip_name = sanitize_file_name($zip_name);
-        
+
         if (empty($zip_name)) {
             return array(
                 'success' => false,
@@ -999,84 +968,81 @@ class WPVTP_Repo_Manager
             $zip->addFile($file_path, $zip_path . '/' . $relative_path);
         }
     }
-    
-    public function queue_commit($theme_path, $commit_message)
+
+    public function queue_commit($theme_path, $commit_message, $file_path = null)
     {
         global $wpdb;
         $table_name = $wpdb->prefix . 'wpvtp_commits_queue';
-    
-        // DEBUG: ver qué llega
-        error_log('WPVTP queue_commit - theme_path: ' . $theme_path);
-        error_log('WPVTP queue_commit - commit_message: ' . $commit_message);
-    
+
         $inserted = $wpdb->insert(
             $table_name,
             array(
                 'theme_path' => $theme_path,
                 'commit_message' => $commit_message,
+                'file_path' => $file_path,
                 'status' => 'pending',
                 'attempts' => 0,
                 'created_at' => current_time('mysql')
             ),
-            array('%s', '%s', '%s', '%d', '%s')
+            array('%s', '%s', '%s', '%s', '%d', '%s')
         );
-    
+
         if ($inserted) {
             $commit_id = $wpdb->insert_id;
-            
+
             $this->process_commit_queue_item($commit_id);
-            
+
             return array(
                 'success' => true,
                 'commit_id' => $commit_id
             );
         }
-    
+
         return array(
             'success' => false,
             'error' => 'Error al encolar commit'
         );
     }
-    
+
     /**
      * Verificar y configurar token antes de push
      */
     private function configure_push_authentication($repo_path)
     {
         $access_token = get_option('wpvtp_oauth_token');
-        
+
         if (empty($access_token)) {
             return false;
         }
-    
+
         $old_cwd = getcwd();
         chdir($repo_path);
-    
+
         // Configurar credential helper en modo cache
         exec('git config credential.helper "cache --timeout=3600"');
-        
+
         // Obtener URL actual
         $output = [];
         exec('git remote get-url origin 2>&1', $output);
         $current_url = isset($output[0]) ? trim($output[0]) : '';
-        
+
         // Limpiar URL (remover token viejo si existe)
         $clean_url = preg_replace('/https:\/\/[^@]+@/', 'https://', $current_url);
-        
+
         // Agregar token nuevo
         $authenticated_url = str_replace(
             'https://github.com/',
             'https://x-access-token:' . $access_token . '@github.com/',
             $clean_url
         );
-        
+
         // Actualizar remote
         exec('git remote set-url origin ' . escapeshellarg($authenticated_url));
-        
+
         chdir($old_cwd);
         return true;
     }
-    
+
     /**
      * Procesar item de la cola de commits
      */
@@ -1084,17 +1050,16 @@ class WPVTP_Repo_Manager
     {
         global $wpdb;
         $table_name = $wpdb->prefix . 'wpvtp_commits_queue';
-    
+
         $item = $wpdb->get_row(
             $wpdb->prepare("SELECT * FROM $table_name WHERE id = %d", $commit_id),
             ARRAY_A
         );
-    
+
         if (!$item) {
             return array('success' => false, 'error' => 'Item no encontrado');
         }
-    
-        // Incrementar intentos
+
         $wpdb->update(
             $table_name,
             array('attempts' => $item['attempts'] + 1),
@@ -1102,12 +1067,14 @@ class WPVTP_Repo_Manager
             array('%d'),
             array('%d')
         );
-    
-        // Intentar commit
-        $result = $this->commit_and_push_changes($item['theme_path'], $item['commit_message']);
-    
+
+        $result = $this->commit_and_push_changes(
+            $item['theme_path'],
+            $item['commit_message'],
+            $item['file_path']
+        );
+
         if ($result['success']) {
-            // Éxito
             $wpdb->update(
                 $table_name,
                 array(
@@ -1119,9 +1086,8 @@ class WPVTP_Repo_Manager
                 array('%d')
             );
         } else {
-            // Fallo
             $status = $item['attempts'] >= 3 ? 'failed' : 'pending';
-            
+
             $wpdb->update(
                 $table_name,
                 array(
@@ -1133,7 +1099,7 @@ class WPVTP_Repo_Manager
                 array('%d')
             );
         }
-    
+
         return $result;
     }
 }

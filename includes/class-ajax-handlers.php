@@ -1,4 +1,5 @@
 <?php
+
 /**
  * AJAX Handlers Class
  *
@@ -49,38 +50,39 @@ class WPVTP_AJAX_Handlers
         add_action('wp_ajax_wpvtp_serve_zip', array($this, 'serve_zip_file'));
         add_action('wp_ajax_wpvtp_retry_commit', array($this, 'retry_commit'));
         add_action('wp_ajax_wpvtp_delete_commit', array($this, 'delete_commit'));
+        add_action('wp_ajax_wpvtp_get_progress', array($this, 'get_progress'));
     }
-    
+
     /**
      * Reintentar commit desde la cola
      */
     public function retry_commit()
     {
         check_ajax_referer('wpvtp_nonce', 'nonce');
-        
+
         $commit_id = intval($_POST['commit_id']);
-        
+
         require_once WPVTP_PLUGIN_DIR . 'includes/class-repo-manager.php';
         $repo_manager = new WPVTP_Repo_Manager();
-        
+
         $result = $repo_manager->process_commit_queue_item($commit_id);
-        
+
         wp_send_json($result);
     }
-    
+
     /**
      * Eliminar commit de la cola
      */
     public function delete_commit()
     {
         check_ajax_referer('wpvtp_nonce', 'nonce');
-        
+
         global $wpdb;
         $commit_id = intval($_POST['commit_id']);
         $table_name = $wpdb->prefix . 'wpvtp_commits_queue';
-        
+
         $deleted = $wpdb->delete($table_name, array('id' => $commit_id), array('%d'));
-        
+
         if ($deleted) {
             wp_send_json_success('Commit eliminado');
         } else {
@@ -121,7 +123,7 @@ class WPVTP_AJAX_Handlers
         } else {
             // Convertir instalaciones a formato de organizaciones
             $organizations = array();
-            
+
             if (isset($installations_result['data']['data'])) {
                 foreach ($installations_result['data']['data'] as $installation) {
                     $account = $installation['account'];
@@ -139,7 +141,7 @@ class WPVTP_AJAX_Handlers
         // Agregar el usuario personal si no está en las instalaciones
         $user_login = $user_result['data']['user']['login'];
         $user_exists = false;
-        
+
         foreach ($organizations as $org) {
             if ($org['login'] === $user_login) {
                 $user_exists = true;
@@ -197,7 +199,7 @@ class WPVTP_AJAX_Handlers
         if (isset($result['data']['installations'])) {
             foreach ($result['data']['installations'] as $installation) {
                 $installation_owner = $installation['installation']['account']['login'];
-                
+
                 if ($installation_owner === $owner) {
                     $filtered_repos = $installation['repositories'];
                     break;
@@ -209,7 +211,7 @@ class WPVTP_AJAX_Handlers
         // (útil para repos públicos o cuando el usuario no tiene la app instalada)
         if (empty($filtered_repos)) {
             $fallback_result = $this->oauth_service->get_repositories($owner, $type);
-            
+
             if ($fallback_result['success']) {
                 $filtered_repos = $fallback_result['data'];
             }
@@ -264,27 +266,30 @@ class WPVTP_AJAX_Handlers
             wp_send_json_error($result['error']);
         }
     }
-    
+
     /**
      * Clonar repositorio.
      */
     public function clone_repository()
     {
         check_ajax_referer('wpvtp_nonce', 'nonce');
-        
+
         require_once WPVTP_PLUGIN_DIR . 'includes/class-repo-manager.php';
         $repo_manager = new WPVTP_Repo_Manager();
-        
+
         $repo_url = esc_url_raw($_POST['repo_url']);
         $branch = sanitize_text_field($_POST['branch']);
         $repo_type = sanitize_text_field($_POST['repo_type']);
         $repo_name = sanitize_text_field($_POST['repo_name']);
         $custom_name = isset($_POST['custom_name']) ? sanitize_text_field($_POST['custom_name']) : '';
-		 // ✅ CAMBIO PRINCIPAL: Obtener el access token para repos privados
+
         $access_token = get_option('wpvtp_oauth_token');
-        
-        $result = $repo_manager->clone_repository($repo_url, $branch, $repo_type, $repo_name, $custom_name, $access_token);
-        
+
+        // Generar job_id único
+        $job_id = uniqid('clone_', true);
+
+        $result = $repo_manager->clone_repository($repo_url, $branch, $repo_type, $repo_name, $custom_name, $access_token, $job_id);
+
         wp_send_json($result);
     }
 
@@ -294,35 +299,37 @@ class WPVTP_AJAX_Handlers
     public function update_repository()
     {
         check_ajax_referer('wpvtp_nonce', 'nonce');
-        
+
         require_once WPVTP_PLUGIN_DIR . 'includes/class-repo-manager.php';
         $repo_manager = new WPVTP_Repo_Manager();
-        
-        $local_path = sanitize_text_field($_POST['local_path']);
-        
-                // ✅ CAMBIO PRINCIPAL: Obtener el access token para repos privados
+
+        $identifier = sanitize_text_field($_POST['identifier']);
         $access_token = get_option('wpvtp_oauth_token');
-        
-        $result = $repo_manager->update_repository($local_path, $access_token);
-        
+
+        $job_id = uniqid('update_', true);
+
+        $result = $repo_manager->update_repository($identifier, $access_token, $job_id);
+
         wp_send_json($result);
     }
-    
+
     /**
      * Cambiar rama de un repositorio.
      */
     public function switch_branch()
     {
         check_ajax_referer('wpvtp_nonce', 'nonce');
-        
+
         require_once WPVTP_PLUGIN_DIR . 'includes/class-repo-manager.php';
         $repo_manager = new WPVTP_Repo_Manager();
-        
-        $local_path = sanitize_text_field($_POST['local_path']);
+
+        $identifier = sanitize_text_field($_POST['identifier']);
         $new_branch = sanitize_text_field($_POST['new_branch']);
-        
-        $result = $repo_manager->switch_branch($local_path, $new_branch);
-        
+
+        $job_id = uniqid('switch_', true);
+
+        $result = $repo_manager->switch_branch($identifier, $new_branch, $job_id);
+
         wp_send_json($result);
     }
 
@@ -332,14 +339,14 @@ class WPVTP_AJAX_Handlers
     public function remove_repository()
     {
         check_ajax_referer('wpvtp_nonce', 'nonce');
-        
+
         require_once WPVTP_PLUGIN_DIR . 'includes/class-repo-manager.php';
         $repo_manager = new WPVTP_Repo_Manager();
-        
-        $local_path = sanitize_text_field($_POST['local_path']);
-        
-        $result = $repo_manager->remove_repository($local_path);
-        
+
+        $identifier = sanitize_text_field($_POST['identifier']);  // ← CAMBIADO
+
+        $result = $repo_manager->remove_repository($identifier);
+
         wp_send_json($result);
     }
 
@@ -360,24 +367,24 @@ class WPVTP_AJAX_Handlers
     public function ajax_disconnect_github()
     {
         check_ajax_referer('wpvtp_nonce', 'nonce');
-        
+
         // Limpiar tokens y datos del usuario
         delete_option('wpvtp_oauth_token');
         delete_option('wpvtp_refresh_token');
         delete_option('wpvtp_github_user');
-        
+
         wp_send_json_success(array('message' => 'Desconectado de GitHub exitosamente'));
     }
-    
+
     /**
      * Descargar wp-content como ZIP
      */
     public function download_wp_content()
     {
         check_ajax_referer('wpvtp_nonce', 'nonce');
-        
+
         $zip_name = isset($_POST['zip_name']) ? sanitize_text_field($_POST['zip_name']) : '';
-        
+
         if (empty($zip_name)) {
             wp_send_json_error('Nombre de archivo requerido');
             return;
@@ -385,9 +392,9 @@ class WPVTP_AJAX_Handlers
 
         require_once WPVTP_PLUGIN_DIR . 'includes/class-repo-manager.php';
         $repo_manager = new WPVTP_Repo_Manager();
-        
+
         $result = $repo_manager->create_wp_content_zip($zip_name);
-        
+
         if ($result['success']) {
             // Devolver URL temporal para descargar
             wp_send_json_success(array(
@@ -432,6 +439,22 @@ class WPVTP_AJAX_Handlers
         unlink($filepath);
 
         exit;
+    }
+
+    public function get_progress()
+    {
+        check_ajax_referer('wpvtp_nonce', 'nonce');
+
+        $job_id = sanitize_text_field($_POST['job_id']);
+
+        require_once WPVTP_PLUGIN_DIR . 'includes/class-progress-tracker.php';
+        $progress = WPVTP_Progress_Tracker::get_progress($job_id);
+
+        if ($progress) {
+            wp_send_json_success($progress);
+        } else {
+            wp_send_json_error('No progress found');
+        }
     }
 }
 

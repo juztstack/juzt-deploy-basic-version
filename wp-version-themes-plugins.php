@@ -4,7 +4,7 @@
  * Plugin Name: Juzt Deploy
  * Plugin URI: https://github.com/jesusuzcategui/wp-versions-themes-plugins
  * Description: WordPress theme and plugin version control. Allows you to preview cloned themes without activating them.
- * Version: 1.8.0
+ * Version: 1.9.0
  * Author: Jesus Uzcategui
  * Author URI: https://github.com/jesusuzcategui
  * License: GPL v2 or later
@@ -23,7 +23,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Definir constantes del plugin
-define('WPVTP_VERSION', '1.8.0');
+define('WPVTP_VERSION', '1.9.0');
 define('WPVTP_PLUGIN_FILE', __FILE__);
 define('WPVTP_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('WPVTP_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -103,11 +103,11 @@ class WP_Versions_Themes_Plugins
         if (is_admin()) {
             add_action('admin_menu', array($this, 'add_admin_menu'));
             add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_scripts'));
-            
+
             // Los handlers AJAX ahora se registran en la clase WPVTP_AJAX_Handlers
             require_once WPVTP_PLUGIN_DIR . 'includes/class-ajax-handlers.php';
             new WPVTP_AJAX_Handlers();
-            
+
             // NUEVO: Ejecutar migración si es necesario
             add_action('admin_init', array($this, 'maybe_run_migration'));
         }
@@ -131,26 +131,115 @@ class WP_Versions_Themes_Plugins
     /**
      * NUEVO: Ejecutar migración si es necesario
      */
+    /**
+     * Verificar y ejecutar migraciones/actualizaciones de BD
+     */
     public function maybe_run_migration()
     {
         $current_version = get_option('wpvtp_db_version', '0');
-        
-        // Si la versión de la BD es menor que 1.4.0, ejecutar migración
-        if (version_compare($current_version, '1.4.0', '<')) {
-            require_once WPVTP_PLUGIN_DIR . 'includes/class-repo-manager.php';
-            $repo_manager = new WPVTP_Repo_Manager();
-            $result = $repo_manager->migrate_old_paths();
-            
-            // Actualizar versión de la BD
-            update_option('wpvtp_db_version', '1.4.0');
-            
-            // Mostrar notificación de éxito
-            if ($result['success'] && $result['migrated'] > 0) {
-                add_action('admin_notices', function() use ($result) {
-                    echo '<div class="notice notice-success is-dismissible">';
-                    echo '<p><strong>WP Versions Themes & Plugins:</strong> ' . esc_html($result['message']) . ' a la nueva estructura compatible con múltiples entornos.</p>';
-                    echo '</div>';
-                });
+        $required_version = '1.8.0'; // Cambiar este número cuando hagas cambios en la BD
+
+        // Si la versión de la BD es menor que la requerida, actualizar
+        if (version_compare($current_version, $required_version, '<')) {
+            $this->update_database_structure();
+        }
+    }
+    /**
+     * Actualizar estructura de la base de datos
+     */
+    private function update_database_structure()
+    {
+        global $wpdb;
+
+        require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
+
+        $table_name = $wpdb->prefix . 'github_repos';
+        $table_name_commits = $wpdb->prefix . 'wpvtp_commits_queue';
+        $charset_collate = $wpdb->get_charset_collate();
+
+        // Tabla de repositorios
+        $sql = "CREATE TABLE $table_name (
+        id mediumint(9) NOT NULL AUTO_INCREMENT,
+        repo_name varchar(255) NOT NULL,
+        repo_url varchar(500) NOT NULL,
+        local_path varchar(500) NOT NULL,
+        folder_name varchar(255) NULL,
+        current_branch varchar(255) NOT NULL,
+        repo_type varchar(20) NOT NULL,
+        last_update datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        created_at datetime DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id),
+        UNIQUE KEY local_path (local_path)
+    ) $charset_collate;";
+
+        // Tabla de cola de commits
+        $sql_commit = "CREATE TABLE $table_name_commits (
+        id bigint(20) NOT NULL AUTO_INCREMENT,
+        theme_path varchar(255) NOT NULL,
+        commit_message text NOT NULL,
+        file_path varchar(500) NULL,
+        status varchar(20) NOT NULL DEFAULT 'pending',
+        attempts int(11) NOT NULL DEFAULT 0,
+        last_error text NULL,
+        created_at datetime NOT NULL,
+        processed_at datetime NULL,
+        PRIMARY KEY (id),
+        KEY status (status),
+        KEY created_at (created_at)
+    ) $charset_collate;";
+
+        // dbDelta actualizará las tablas automáticamente si hay cambios
+        dbDelta($sql);
+        dbDelta($sql_commit);
+
+        // Migrar datos antiguos si es necesario
+        $this->migrate_repo_data();
+
+        // Actualizar versión de la BD
+        update_option('wpvtp_db_version', '1.9.0');
+
+        // Mostrar notificación
+        add_action('admin_notices', function () {
+            echo '<div class="notice notice-success is-dismissible">';
+            echo '<p><strong>Juzt Deploy:</strong> Base de datos actualizada correctamente.</p>';
+            echo '</div>';
+        });
+    }
+
+    /**
+     * Migrar datos de versiones antiguas
+     */
+    private function migrate_repo_data()
+    {
+        global $wpdb;
+        $table_name = $wpdb->prefix . 'github_repos';
+
+        // Verificar si la columna folder_name existe
+        $column_exists = $wpdb->get_results(
+            "SHOW COLUMNS FROM {$table_name} LIKE 'folder_name'"
+        );
+
+        // Si existe la columna, migrar registros sin folder_name
+        if (!empty($column_exists)) {
+            $repos = $wpdb->get_results(
+                "SELECT * FROM {$table_name} WHERE folder_name IS NULL OR folder_name = ''",
+                ARRAY_A
+            );
+
+            foreach ($repos as $repo) {
+                $folder_name = basename($repo['local_path']);
+
+                $wpdb->update(
+                    $table_name,
+                    array('folder_name' => $folder_name),
+                    array('id' => $repo['id']),
+                    array('%s'),
+                    array('%d')
+                );
+            }
+
+            if (count($repos) > 0) {
+                error_log('WPVTP: Migrados ' . count($repos) . ' registros a la nueva estructura');
             }
         }
     }
@@ -170,7 +259,7 @@ class WP_Versions_Themes_Plugins
             update_option('wpvtp_oauth_token', $session_token);
             update_option('wpvtp_refresh_token', $refresh_token);
             update_option('wpvtp_token_last_refresh', time());
-            
+
             // Redirigir a la página de settings para limpiar la URL del token
             $url = admin_url('admin.php?page=wp-versions-themes-plugins&tab=settings');
             $url = add_query_arg(array(
@@ -308,7 +397,7 @@ class WP_Versions_Themes_Plugins
 
             if (isset($_SESSION['wpvtp_preview_theme'])) {
                 $theme_handle = $_SESSION['wpvtp_preview_theme'];
-				session_write_close();
+                session_write_close();
                 error_log('WPVTP Preview: Aplicando tema desde sesión: ' . $theme_handle);
                 $this->apply_theme_preview($theme_handle);
                 // ✅ AGREGAR ESTA LÍNEA - Mostrar barra también cuando viene de sesión
@@ -346,19 +435,19 @@ class WP_Versions_Themes_Plugins
             session_start();
         }
         $_SESSION['wpvtp_preview_theme'] = $theme_handle;
-		session_write_close();
+        session_write_close();
 
         error_log('WPVTP Preview: Aplicando tema: ' . $theme_handle);
         $this->apply_theme_preview($theme_handle);
 
-        
+
 
         add_action('wp_head', function () use ($theme_handle) {
             error_log('WPVTP Preview: Tema final aplicado - stylesheet: ' . get_stylesheet());
             error_log('WPVTP Preview: Tema final aplicado - template: ' . get_template());
             error_log('WPVTP Preview: Esperado: ' . $theme_handle);
         });
-        
+
         add_action('wp_footer', array($this, 'add_preview_bar'));
     }
 
@@ -393,7 +482,7 @@ class WP_Versions_Themes_Plugins
      */
     public function add_preview_bar()
     {
-        
+
         if (!isset($_SESSION['wpvtp_preview_theme'])) {
             return;
         }
@@ -435,7 +524,7 @@ class WP_Versions_Themes_Plugins
             }).then(() => {
                 setTimeout(function(){
                     window.location.href = "' . esc_url($exit_url) . '";
-                }, 800);
+                }, 3000);
             });
         }
         
@@ -449,8 +538,12 @@ class WP_Versions_Themes_Plugins
      */
     public function activate()
     {
-        // Crear tabla de base de datos
-        $this->create_database_table();
+        require_once plugin_dir_path(__FILE__) . 'includes/class-repo-manager.php';
+        $repo_manager = new WPVTP_Repo_Manager();
+        $repo_manager->detect_git_mode();
+
+        // Usar el nuevo método de actualización
+        $this->update_database_structure();
 
         // Crear directorio de assets si no existe
         $upload_dir = wp_upload_dir();
@@ -459,7 +552,6 @@ class WP_Versions_Themes_Plugins
             wp_mkdir_p($wpvtp_dir);
         }
 
-        // Flush rewrite rules
         flush_rewrite_rules();
     }
 
@@ -494,60 +586,9 @@ class WP_Versions_Themes_Plugins
         }
 
         unset($_SESSION['wpvtp_preview_theme']);
-		session_write_close();
+        session_write_close();
 
         wp_send_json_success();
-    }
-
-    /**
-     * Crear tabla de base de datos (actualizado con folder_name)
-     */
-    private function create_database_table()
-    {
-        global $wpdb;
-
-        $table_name = $wpdb->prefix . 'github_repos';
-
-        $charset_collate = $wpdb->get_charset_collate();
-
-        $sql = "CREATE TABLE IF NOT EXISTS $table_name (
-            id mediumint(9) NOT NULL AUTO_INCREMENT,
-            repo_name varchar(255) NOT NULL,
-            repo_url varchar(500) NOT NULL,
-            local_path varchar(500) NOT NULL,
-            folder_name varchar(255) NULL,
-            current_branch varchar(255) NOT NULL,
-            repo_type varchar(20) NOT NULL,
-            last_update datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            created_at datetime DEFAULT CURRENT_TIMESTAMP,
-            PRIMARY KEY (id),
-            UNIQUE KEY local_path (local_path)
-        ) $charset_collate;";
-        
-        $table_name_commits = $wpdb->prefix . 'wpvtp_commits_queue';
-        
-        $sql_commit = "CREATE TABLE IF NOT EXISTS $table_name_commits (
-            id bigint(20) NOT NULL AUTO_INCREMENT,
-            theme_path varchar(255) NOT NULL,
-            commit_message text NOT NULL,
-            status varchar(20) NOT NULL DEFAULT 'pending',
-            attempts int(11) NOT NULL DEFAULT 0,
-            last_error text NULL,
-            created_at datetime NOT NULL,
-            processed_at datetime NULL,
-            PRIMARY KEY (id),
-            KEY status (status),
-            KEY created_at (created_at)
-        ) $charset_collate;";
-
-        require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
-        dbDelta($sql);
-        dbDelta($sql_commit);
-        
-        // Actualizar versión de la BD
-        update_option('wpvtp_db_version', '1.6.0');
-        update_option('wpvtp_github_app_id', '1953130');
-        update_option('wpvtp_github_app_name', 'wordpress-theme-versions');
     }
 }
 
@@ -569,7 +610,7 @@ add_action('init', function () {
     // Mantener preview en navegación solo si no hay parámetro wpvtheme
     if (isset($_SESSION['wpvtp_preview_theme']) && !isset($_GET['wpvtheme'])) {
         $theme_handle = $_SESSION['wpvtp_preview_theme'];
-		session_write_close();
+        session_write_close();
 
         // Verificar que el tema aún existe
         $theme_path = get_theme_root() . '/' . $theme_handle;

@@ -620,3 +620,101 @@
 .wpvtp-mt-20 { margin-top: 20px; }
 .wpvtp-hidden { display: none; }
 .wpvtp-visible { display: block; }
+
+/* assets/css/admin.css - Agregar estilos para progress bars */
+
+.wpvtp-progress-container {
+    margin: 20px 0;
+    padding: 15px;
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+}
+
+.wpvtp-progress-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.wpvtp-progress-message {
+    font-size: 14px;
+    color: #333;
+}
+
+.wpvtp-progress-percentage {
+    font-size: 14px;
+    font-weight: 600;
+    color: #0073aa;
+}
+
+.wpvtp-progress-bar-bg {
+    background: #e0e0e0;
+    height: 24px;
+    border-radius: 12px;
+    overflow: hidden;
+    position: relative;
+}
+
+.wpvtp-progress-bar {
+    background: linear-gradient(90deg, #0073aa 0%, #00a0d2 100%);
+    height: 100%;
+    width: 0%;
+    transition: width 0.5s ease, background 0.3s ease;
+    position: relative;
+}
+
+.wpvtp-progress-bar::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(
+        90deg,
+        transparent 0%,
+        rgba(255, 255, 255, 0.3) 50%,
+        transparent 100%
+    );
+    animation: progress-shine 1.5s infinite;
+}
+
+@keyframes progress-shine {
+    0% {
+        transform: translateX(-100%);
+    }
+    100% {
+        transform: translateX(100%);
+    }
+}
+
+.wpvtp-progress-row td {
+    padding: 0 !important;
+}
+
+.wpvtp-progress-row .wpvtp-progress-container {
+    margin: 10px;
+}
+
+/* Git Mode Badge */
+.wpvtp-git-mode-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.wpvtp-git-mode-badge.cli-mode {
+    background: #46b450;
+    color: white;
+}
+
+.wpvtp-git-mode-badge.api-mode {
+    background: #0073aa;
+    color: white;
+}
