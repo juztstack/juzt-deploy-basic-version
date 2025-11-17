@@ -7,11 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Planned
-- Multi-repository management
 - Rollback functionality
 - Team collaboration features
 
-## [1.9.0] - 2024-11-15
+## [1.9.0] - 2025-11-15
 
 ### Added
 - GitHub API mode for hosts without Git command support
@@ -25,7 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Enhanced deployment flexibility with dual-mode operation (Git CLI / GitHub API)
 
-## [1.7.0] - 2024-10-20
+## [1.7.0] - 2025-10-20
 
 ### Added
 - Auto-commit filter for Section Builder v1 changes
