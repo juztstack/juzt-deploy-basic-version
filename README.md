@@ -91,7 +91,7 @@ This is the community edition with core functionality. **Juzt Deploy Pro** (comi
 
 ### Middleware Setup
 
-The middleware repository is available at [link]. Follow its installation guide for deployment.
+The middleware repository is available at [here](https://github.com/juztstack/starter-basic-template-middleware-github-oauth). Follow its installation guide for deployment.
 
 ## 🤝 Contributing
 
