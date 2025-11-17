@@ -136,5 +136,5 @@ Part of the **Juzt Stack** ecosystem:
 
 ---
 
-Made with ❤️ in Colombia
+Made with ❤️ in Colombia by a Venezuelan.
 
