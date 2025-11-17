@@ -1,33 +1,140 @@
 # Juzt Deploy
 
-This is a plugin for WordPress that allows you to clone repositories as plugins and themes with the purpose the maintaining the control version for these elements. This plugin uses GITHUB APP to identify the user and capture private and public repositories, and they can clone inside the wp-content path depending on the type of clone.
+> WordPress plugin for seamless GitHub integration and automated deployment workflows
 
-## Changelog
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![WordPress](https://img.shields.io/badge/WordPress-5.8+-blue.svg)](https://wordpress.org/)
+[![Version](https://img.shields.io/badge/version-1.9.0-green.svg)](https://github.com/tu-usuario/juzt-deploy/releases)
 
-### v1.9.0
+## 📋 Overview
+
+Juzt Deploy brings Shopify-like deployment workflows to WordPress. It connects your WordPress site with GitHub repositories, enabling version control, automated deployments, and collaborative theme development without relying on the WordPress database for theme structure.
+
+Part of the **Juzt Stack** ecosystem - a comprehensive WordPress development toolkit that revolutionizes theme and template management.
+
+## ✨ Features
+
+- 🔗 **GitHub Integration** - Connect WordPress with GitHub repositories via OAuth
+- 🚀 **Automated Deployments** - Push to deploy workflow
+- 📦 **Version Control** - Full Git history for your themes
+- 🔄 **Sync Templates** - Keep your local and remote templates synchronized
+- 🔐 **Secure Authentication** - GitHub App integration with secure token management
+- 📝 **Deployment Logs** - Track all deployments and changes
+
+## 🚀 Installation
+
+### Requirements
+
+- WordPress 5.8 or higher
+- PHP 7.4 or higher
+- GitHub account
+- Juzt Pulse theme (compatible theme)
+
+### Steps
+
+1. Download the latest release
+2. Upload to `/wp-content/plugins/juzt-deploy`
+3. Activate the plugin
+4. Navigate to **Juzt Deploy** → **Settings**
+5. Connect your GitHub account
+6. Configure your repository settings
+
+## 📖 Quick Start
+
+### 1. Connect GitHub
 ```
-- Fix issues with the git command when it is not present on hosting.
-- Add mode connection with the API GITHUB to  clone, pull, and push changes.
+WordPress Admin → Juzt Deploy → Settings → Connect GitHub
 ```
 
-<img width="1581" height="799" alt="image" src="https://github.com/user-attachments/assets/0f1ffc67-1fc2-4baa-bf1e-feb29b82c962" />
-
-
-<img width="1582" height="1250" alt="image" src="https://github.com/user-attachments/assets/b1adeb58-4954-4a37-912f-4b38c3a5ce37" />
-
-
-### v1.7.0
+### 2. Link Repository
 ```
-- Fix issues with private repositories.
-- Add filter to auto-commit changes from Section Builder v1
-- Add refresh token
-- Add Queue commits management
+Select your repository → Configure branch → Save
 ```
 
+### 3. Deploy
+```
+Make changes → Commit → Push → Automatic deployment
+```
 
-<img width="1551" height="629" alt="image" src="https://github.com/user-attachments/assets/d4d8c340-a64b-41ba-9c8c-73f8a3c42a7f" />
+## 🏗️ Architecture
 
-<img width="1709" height="1526" alt="image" src="https://github.com/user-attachments/assets/c5248a29-c545-450f-a91c-a48311799d0f" />
+Juzt Deploy works with a middleware service that handles GitHub webhook communications:
+```
+GitHub → Webhook → Middleware → WordPress → Theme Update
+```
 
-<img width="1547" height="722" alt="image" src="https://github.com/user-attachments/assets/df91a358-91f3-4045-8f08-442d2bc5dd9b" />
+### Components
+
+- **WordPress Plugin** - Manages GitHub connection and deployments
+- **Middleware Service** - Handles webhook processing (repository included)
+- **GitHub App** - Secure OAuth integration
+
+## 🛣️ Roadmap
+
+This is the community edition with core functionality. **Juzt Deploy Pro** (coming soon) will include:
+
+- ⭐ Multi-repository management
+- ⭐ Advanced deployment rules
+- ⭐ Rollback functionality
+- ⭐ Team collaboration features
+- ⭐ Deployment approval workflows
+- ⭐ Priority support
+
+## 🔧 Configuration
+
+### GitHub App Setup
+
+1. Create a GitHub App in your GitHub account
+2. Set the callback URL: `https://your-site.com/wp-admin/admin-ajax.php?action=juzt_deploy_callback`
+3. Enable Repository webhooks
+4. Copy Client ID and Client Secret to plugin settings
+
+### Middleware Setup
+
+The middleware repository is available at [link]. Follow its installation guide for deployment.
+
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## 📝 Recent Changes
+
+### Latest Release (v1.9.0)
+- Git command compatibility improvements for limited hosting environments
+- GitHub API integration for clone, pull, and push operations
+
+[View full changelog](CHANGELOG.md)
+
+## 📝 License
+
+Copyright © 2024 Jesus Uzcategui
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🔗 Related Projects
+
+Part of the **Juzt Stack** ecosystem:
+> The ecosystem will be published in the coming weeks. Subscribe to our newsletter at [https://www.juztstack.dev](https://www.juztstack.dev)
+<!--
+- [Juzt Studio](link) - Visual template builder for WordPress
+- [Juzt Pulse](link) - JSON-powered theme engine
+- [Juzt CLI](link) - Command-line development tools
+-->
+
+## 👤 Author
+
+**Jesus Uzcategui**
+
+- Website: [jesusuzcategui.com]
+- GitHub: [@jesusuzcategui](https://github.com/jesusuzcategui)
+
+## 💬 Support
+
+- 📧 Email: info@juztstack.dev
+- 💼 Issues: [GitHub Issues](https://github.com/juztstack/juzt-deploy-basic-version/issues)
+- 📖 Documentation: [Full Documentation](https://juztstack.dev/docs)
+
+---
+
+Made with ❤️ in Colombia
 
