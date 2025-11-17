@@ -103,7 +103,7 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 - Git command compatibility improvements for limited hosting environments
 - GitHub API integration for clone, pull, and push operations
 
-[View full changelog](CHANGELOG.md)
+[View full changelog](CHANGELOG.MD)
 
 ## 📝 License
 
