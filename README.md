@@ -93,6 +93,8 @@ This is the community edition with core functionality. **Juzt Deploy Pro** (comi
 
 The middleware repository is available at [here](https://github.com/juztstack/starter-basic-template-middleware-github-oauth). Follow its installation guide for deployment.
 
+### Once time get full setup middleware. Please update the url on the in includes/class-oauth-service.php
+
 ## 🤝 Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
