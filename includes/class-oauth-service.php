@@ -19,8 +19,7 @@ class WPVTP_OAuth_Service
     /**
      * URL del servicio middleware
      */
-    const OAUTH_SERVICE_URL = 'https://github-app-api-production.up.railway.app';
-    //const OAUTH_SERVICE_URL = 'https://16002e156c8e.ngrok-free.app';
+    const OAUTH_SERVICE_URL 'Add Middleware URL';
 
     /**
      * Propiedades de la clase
