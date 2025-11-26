@@ -4,7 +4,7 @@
  * Plugin Name: Juzt Deploy
  * Plugin URI: https://github.com/jesusuzcategui/wp-versions-themes-plugins
  * Description: WordPress theme and plugin version control. Allows you to preview cloned themes without activating them.
- * Version: 1.9.0
+ * Version: 1.10.0
  * Author: Jesus Uzcategui
  * Author URI: https://github.com/jesusuzcategui
  * License: GPL v2 or later
@@ -23,7 +23,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Definir constantes del plugin
-define('WPVTP_VERSION', '1.9.0');
+define('WPVTP_VERSION', '1.10.0');
 define('WPVTP_PLUGIN_FILE', __FILE__);
 define('WPVTP_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('WPVTP_PLUGIN_URL', plugin_dir_url(__FILE__));

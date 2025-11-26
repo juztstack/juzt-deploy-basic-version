@@ -313,10 +313,57 @@ class WPVTP_Admin_Interface
     }
 
     /**
+     * Procesar guardado de configuración de Git mode
+     */
+    private function handle_git_mode_save()
+    {
+        if (!isset($_POST['save_git_mode']) || !isset($_POST['wpvtp_git_mode_nonce'])) {
+            return;
+        }
+
+        if (!wp_verify_nonce($_POST['wpvtp_git_mode_nonce'], 'wpvtp_save_git_mode')) {
+            return;
+        }
+
+        if (!current_user_can('manage_options')) {
+            return;
+        }
+
+        $force_mode = sanitize_text_field($_POST['force_git_mode']);
+
+        if (!in_array($force_mode, array('auto', 'cli', 'api'))) {
+            return;
+        }
+
+        update_option('wpvtp_force_git_mode', $force_mode);
+
+        // Re-detectar el modo
+        if ($force_mode === 'auto') {
+            $this->repo_manager->detect_git_mode();
+        } else {
+            update_option('wpvtp_git_mode', $force_mode);
+            $reason = $force_mode === 'cli' ? 'Forced to CLI mode' : 'Forced to API mode';
+            update_option('wpvtp_git_mode_reason', $reason);
+        }
+
+        // Redirigir para limpiar POST
+        $url = admin_url('admin.php?page=wp-versions-themes-plugins&tab=settings');
+        $url = add_query_arg(array(
+            'wpvtp_message' => urlencode('Git mode saved successfully'),
+            'wpvtp_message_type' => 'success'
+        ), $url);
+
+        wp_redirect($url);
+        exit;
+    }
+
+    /**
      * Render settings page
      */
     public function render_settings_page()
     {
+        $this->handle_git_mode_save();
+
         echo '<div class="wpvtp-settings">';
         echo '<h1>GitHub Settings</h1>';
 
