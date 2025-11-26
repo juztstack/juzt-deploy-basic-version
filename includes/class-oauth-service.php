@@ -19,7 +19,7 @@ class WPVTP_OAuth_Service
     /**
      * URL del servicio middleware
      */
-    const OAUTH_SERVICE_URL 'Add Middleware URL';
+    const OAUTH_SERVICE_URL = 'Add Middleware URL';
 
     /**
      * Propiedades de la clase
