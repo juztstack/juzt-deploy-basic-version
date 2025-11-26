@@ -780,7 +780,7 @@
                     <h3>✅ Installation Successful</h3>
                     <p>${response.message}</p>
                     <p style="margin-top: 15px;">
-                      <a href="${wpvtp_ajax.admin_url}admin.php?page=wp-versions-themes-plugins" class="button button-primary">View Repositories</a>
+                      <a href="${wpvtp_ajax.admin_url}" class="button button-primary">View Repositories</a>
                     </p>
                   `
                 )
@@ -817,7 +817,7 @@
                   <h3>✅ Installation Successful</h3>
                   <p>${response.message}</p>
                   <p style="margin-top: 15px;">
-                    <a href="${wpvtp_ajax.admin_url}admin.php?page=wp-versions-themes-plugins" class="button button-primary">View Repositories</a>
+                    <a href="${wpvtp_ajax.admin_url}" class="button button-primary">View Repositories</a>
                   </p>
                 `
               )

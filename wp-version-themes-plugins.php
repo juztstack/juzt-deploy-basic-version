@@ -365,7 +365,8 @@ class WP_Versions_Themes_Plugins
 
         wp_localize_script('wpvtp-admin-script', 'wpvtp_ajax', array(
             'ajax_url' => admin_url('admin-ajax.php'),
-            'nonce' => wp_create_nonce('wpvtp_nonce')
+            'nonce' => wp_create_nonce('wpvtp_nonce'),
+            'admin_url' => admin_url('admin.php?page=wp-versions-themes-plugins'),
         ));
     }
 

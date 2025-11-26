@@ -40,54 +40,128 @@ class WPVTP_Git_API extends WPVTP_Git_Interface
       $headers['Authorization'] = 'Bearer ' . $access_token;
     }
 
+    // Usar directorio temporal en el mismo volumen (wp-content/uploads)
+    $upload_dir = wp_upload_dir();
+    $temp_base = trailingslashit($upload_dir['basedir']) . 'wpvtp-temp/';
+
+    // Crear directorio temporal si no existe
+    if (!file_exists($temp_base)) {
+      wp_mkdir_p($temp_base);
+    }
+
+    $temp_zip = $temp_base . 'repo-' . uniqid() . '.zip';
+    $temp_extract = $temp_base . 'extract-' . uniqid() . '/';
+
     $response = wp_remote_get($zip_url, array(
       'headers' => $headers,
       'timeout' => 300,
       'stream' => true,
-      'filename' => get_temp_dir() . 'repo.zip'
+      'filename' => $temp_zip
     ));
 
     if (is_wp_error($response)) {
       return array('success' => false, 'error' => $response->get_error_message());
     }
 
-    $zip_file = get_temp_dir() . 'repo.zip';
+    // Verificar que el archivo se descargó
+    if (!file_exists($temp_zip)) {
+      return array('success' => false, 'error' => 'Failed to download repository');
+    }
 
     // Extraer ZIP
     WP_Filesystem();
     global $wp_filesystem;
 
-    $unzip_result = unzip_file($zip_file, get_temp_dir() . 'repo_extract');
+    $unzip_result = unzip_file($temp_zip, $temp_extract);
 
     if (is_wp_error($unzip_result)) {
-      @unlink($zip_file);
+      @unlink($temp_zip);
       return array('success' => false, 'error' => $unzip_result->get_error_message());
     }
 
     // GitHub crea carpeta con formato: owner-repo-commitsha
-    $extracted_dirs = glob(get_temp_dir() . 'repo_extract/*');
+    $extracted_dirs = glob($temp_extract . '*');
 
-    if (empty($extracted_dirs)) {
-      @unlink($zip_file);
+    if (empty($extracted_dirs) || !is_dir($extracted_dirs[0])) {
+      @unlink($temp_zip);
+      $wp_filesystem->rmdir($temp_extract, true);
       return array('success' => false, 'error' => 'No files extracted');
     }
 
     $extracted_dir = $extracted_dirs[0];
 
-    // Mover a destino
-    if (!$wp_filesystem->move($extracted_dir, $destination, true)) {
-      @unlink($zip_file);
-      return array('success' => false, 'error' => 'Failed to move files');
+    // Crear directorio de destino
+    if (!file_exists($destination)) {
+      wp_mkdir_p($destination);
+    }
+
+    // Copiar archivos recursivamente en lugar de mover
+    $copy_result = $this->copy_directory($extracted_dir, $destination);
+
+    // Limpiar archivos temporales
+    @unlink($temp_zip);
+    $wp_filesystem->rmdir($temp_extract, true);
+
+    if (!$copy_result) {
+      return array('success' => false, 'error' => 'Failed to copy files to destination');
     }
 
     // Guardar metadata
     $this->save_repo_metadata($destination, $owner, $repo, $branch);
 
-    // Limpiar
-    @unlink($zip_file);
-    $wp_filesystem->rmdir(get_temp_dir() . 'repo_extract', true);
-
     return array('success' => true);
+  }
+  /**
+   * Copiar directorio recursivamente
+   * 
+   * @param string $source Directorio origen
+   * @param string $destination Directorio destino
+   * @return bool
+   */
+  private function copy_directory($source, $destination)
+  {
+    WP_Filesystem();
+    global $wp_filesystem;
+
+    if (!is_dir($source)) {
+      return false;
+    }
+
+    // Crear directorio destino si no existe
+    if (!$wp_filesystem->is_dir($destination)) {
+      $wp_filesystem->mkdir($destination);
+    }
+
+    $dir = opendir($source);
+    if (!$dir) {
+      return false;
+    }
+
+    while (($file = readdir($dir)) !== false) {
+      if ($file === '.' || $file === '..') {
+        continue;
+      }
+
+      $source_path = trailingslashit($source) . $file;
+      $dest_path = trailingslashit($destination) . $file;
+
+      if (is_dir($source_path)) {
+        // Copiar subdirectorio recursivamente
+        if (!$this->copy_directory($source_path, $dest_path)) {
+          closedir($dir);
+          return false;
+        }
+      } else {
+        // Copiar archivo
+        if (!$wp_filesystem->copy($source_path, $dest_path, true)) {
+          closedir($dir);
+          return false;
+        }
+      }
+    }
+
+    closedir($dir);
+    return true;
   }
 
   public function update_repository($repo_path, $access_token = '')
@@ -180,7 +254,19 @@ class WPVTP_Git_API extends WPVTP_Git_Interface
     }
 
     // 2. Leer contenido del archivo
-    $content = file_get_contents($file_path);
+    // Asegurar que sea ruta absoluta
+    $absolute_file_path = (strpos($file_path, $repo_path) === 0)
+      ? $file_path
+      : $repo_path . '/' . ltrim($file_path, '/');
+
+    if (!file_exists($absolute_file_path)) {
+      return array(
+        'success' => false,
+        'error' => 'File not found: ' . $absolute_file_path
+      );
+    }
+
+    $content = file_get_contents($absolute_file_path);
     $content_base64 = base64_encode($content);
 
     // 3. Commit vía API
