@@ -4,7 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![WordPress](https://img.shields.io/badge/WordPress-5.8+-blue.svg)](https://wordpress.org/)
-[![Version](https://img.shields.io/badge/version-1.11.0-green.svg)](https://github.com/tu-usuario/juzt-deploy/releases)
+[![Version](https://img.shields.io/badge/version-1.12.0-green.svg)](https://github.com/tu-usuario/juzt-deploy/releases)
 
 ## 📋 Overview
 
@@ -80,13 +80,12 @@ This is the community edition with core functionality. **Juzt Deploy Pro** (comi
 ### GitHub App Setup
 
 1. Create a GitHub App in your GitHub account
-2. Set the callback URL: `https://your-site.com/wp-admin/admin-ajax.php?action=juzt_deploy_callback`
-3. Enable Repository webhooks
-4. Copy Client ID and Client Secret to plugin settings
+2. Set the callback URL: `https://middleware.app/auth/github/callback`
+3. Copy Client ID and Client Secret to Middleware Application
 
 ### Middleware Setup
 
-The middleware repository is available at [here](https://github.com/juztstack/starter-basic-template-middleware-github-oauth). Follow its installation guide for deployment.
+The middleware application repository is available at [here](https://github.com/juztstack/starter-basic-template-middleware-github-oauth). Follow its installation guide for deployment.
 
 ### Once time get full setup middleware. Please update the url on the in includes/class-oauth-service.php
 
@@ -96,9 +95,10 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## 📝 Recent Changes
 
-### Latest Release (v1.9.0)
-- Git command compatibility improvements for limited hosting environments
-- GitHub API integration for clone, pull, and push operations
+### Latest Release (v1.11.0)
+- Fix issues with download wp-content path
+- Fix issues with load paginate repositories
+- Add button on settings page for set up Github App on other github accounts.
 
 [View full changelog](CHANGELOG.md)
 
