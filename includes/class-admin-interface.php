@@ -366,6 +366,7 @@ class WPVTP_Admin_Interface
 
         echo '<div class="wpvtp-settings">';
         echo '<h1>GitHub Settings</h1>';
+        echo '<p>If you need install the Github App on another Orgs or User, <a href="https://github.com/apps/wordpress-theme-versions" target="_blank"/>Click here</a>.</p>';
 
         // Show messages
         if (isset($_GET['wpvtp_message'])) {

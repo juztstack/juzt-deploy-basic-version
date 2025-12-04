@@ -862,15 +862,10 @@ class WPVTP_Repo_Manager
         return isset($output[0]) ? trim($output[0]) : false;
     }
 
-    /**
-     * Crear ZIP de wp-content
-     * 
-     * @param string $zip_name Nombre del archivo ZIP (sin extensión)
-     * @return array
-     */
     public function create_wp_content_zip($zip_name)
     {
-        // Sanitizar nombre
+        $this->cleanup_old_zips();
+        
         $zip_name = sanitize_file_name($zip_name);
 
         if (empty($zip_name)) {
@@ -880,87 +875,129 @@ class WPVTP_Repo_Manager
             );
         }
 
-        // Verificar que la clase ZipArchive existe
-        if (!class_exists('ZipArchive')) {
-            return array(
-                'success' => false,
-                'error' => 'ZipArchive no está disponible en el servidor'
-            );
+        // Aumentar límites
+        @set_time_limit(300);
+        @ini_set('memory_limit', '512M');
+
+        require_once ABSPATH . 'wp-admin/includes/class-pclzip.php';
+
+        $upload_dir = wp_upload_dir();
+        $temp_dir = trailingslashit($upload_dir['basedir']) . 'wpvtp-downloads/';
+
+        if (!file_exists($temp_dir)) {
+            wp_mkdir_p($temp_dir);
         }
 
-        // Paths
-        $wp_content_path = WP_CONTENT_DIR;
-        $temp_dir = get_temp_dir();
         $zip_filename = $zip_name . '.zip';
         $zip_filepath = $temp_dir . $zip_filename;
 
-        // Eliminar ZIP anterior si existe
+        error_log('WPVTP: Creating ZIP with PclZip at: ' . $zip_filepath);
+
+        // Eliminar ZIP anterior
         if (file_exists($zip_filepath)) {
-            unlink($zip_filepath);
+            @unlink($zip_filepath);
         }
 
-        // Crear ZIP
-        $zip = new ZipArchive();
-        if ($zip->open($zip_filepath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== TRUE) {
+        $archive = new PclZip($zip_filepath);
+        
+        // Lista de directorios importantes a incluir
+        $wp_content_path = WP_CONTENT_DIR;
+        $directories_to_include = array(
+            'themes',
+            'plugins',
+            'uploads',
+            'mu-plugins'
+        );
+        
+        $items_to_add = array();
+        foreach ($directories_to_include as $dir) {
+            $full_path = $wp_content_path . '/' . $dir;
+            if (is_dir($full_path) && is_readable($full_path)) {
+                $items_to_add[] = $full_path;
+            }
+        }
+        
+        if (empty($items_to_add)) {
             return array(
                 'success' => false,
-                'error' => 'No se pudo crear el archivo ZIP'
+                'error' => 'No se encontraron directorios para incluir en el ZIP'
             );
         }
+        
+        error_log('WPVTP: Adding directories: ' . implode(', ', $directories_to_include));
+        
+        // Agregar cada directorio al ZIP
+        $first = true;
+        foreach ($items_to_add as $item) {
+            $dir_name = basename($item);
+            
+            if ($first) {
+                // Primera adición: crear el archivo
+                $result = $archive->create(
+                    $item,
+                    PCLZIP_OPT_REMOVE_PATH, $wp_content_path,
+                    PCLZIP_OPT_ADD_PATH, 'wp-content'
+                );
+                $first = false;
+            } else {
+                // Siguientes adiciones: agregar al archivo existente
+                $result = $archive->add(
+                    $item,
+                    PCLZIP_OPT_REMOVE_PATH, $wp_content_path,
+                    PCLZIP_OPT_ADD_PATH, 'wp-content'
+                );
+            }
+            
+            if ($result == 0) {
+                $error = $archive->errorInfo(true);
+                error_log('WPVTP PclZip Error adding ' . $dir_name . ': ' . $error);
+                // Continuar con el siguiente directorio en lugar de fallar completamente
+                continue;
+            }
+            
+            error_log('WPVTP: Added ' . $dir_name . ' successfully');
+        }
 
-        // Agregar archivos al ZIP
-        $this->add_directory_to_zip($zip, $wp_content_path, 'wp-content');
-
-        $zip->close();
-
-        // Verificar que se creó
         if (!file_exists($zip_filepath)) {
+            error_log('WPVTP: ZIP file does not exist after PclZip create');
             return array(
                 'success' => false,
                 'error' => 'Error al crear el archivo ZIP'
             );
         }
 
+        $filesize = filesize($zip_filepath);
+        error_log('WPVTP: ZIP created successfully, size: ' . size_format($filesize));
+
         return array(
             'success' => true,
             'filepath' => $zip_filepath,
             'filename' => $zip_filename,
-            'size' => filesize($zip_filepath)
+            'size' => $filesize
         );
     }
 
     /**
-     * Agregar directorio recursivamente al ZIP
-     * 
-     * @param ZipArchive $zip
-     * @param string $source_path
-     * @param string $zip_path
+     * Limpiar ZIPs antiguos (más de 1 hora)
      */
-    private function add_directory_to_zip($zip, $source_path, $zip_path)
+    private function cleanup_old_zips()
     {
-        $source_path = rtrim($source_path, '/');
-        $zip_path = rtrim($zip_path, '/');
-
-        // Crear directorio en el ZIP
-        $zip->addEmptyDir($zip_path);
-
-        // Obtener archivos y directorios
-        $files = new RecursiveIteratorIterator(
-            new RecursiveDirectoryIterator($source_path),
-            RecursiveIteratorIterator::LEAVES_ONLY
-        );
-
+        $upload_dir = wp_upload_dir();
+        $temp_dir = trailingslashit($upload_dir['basedir']) . 'wpvtp-downloads/';
+        
+        if (!is_dir($temp_dir)) {
+            return;
+        }
+        
+        $files = glob($temp_dir . '*.zip');
+        $now = time();
+        
         foreach ($files as $file) {
-            // Skip directorios (ya se agregan con addEmptyDir)
-            if ($file->isDir()) {
-                continue;
+            if (is_file($file)) {
+                if ($now - filemtime($file) >= 3600) {
+                    @unlink($file);
+                }
             }
-
-            $file_path = $file->getRealPath();
-            $relative_path = substr($file_path, strlen($source_path) + 1);
-
-            // Agregar archivo al ZIP
-            $zip->addFile($file_path, $zip_path . '/' . $relative_path);
         }
     }
 
