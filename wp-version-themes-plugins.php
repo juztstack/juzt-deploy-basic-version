@@ -23,7 +23,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Definir constantes del plugin
-define('WPVTP_VERSION', '1.11.0');
+define('WPVTP_VERSION', '1.12.0');
 define('WPVTP_PLUGIN_FILE', __FILE__);
 define('WPVTP_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('WPVTP_PLUGIN_URL', plugin_dir_url(__FILE__));
