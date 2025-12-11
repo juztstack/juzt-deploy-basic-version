@@ -51,6 +51,7 @@ class WPVTP_AJAX_Handlers
         add_action('wp_ajax_wpvtp_retry_commit', array($this, 'retry_commit'));
         add_action('wp_ajax_wpvtp_delete_commit', array($this, 'delete_commit'));
         add_action('wp_ajax_wpvtp_get_progress', array($this, 'get_progress'));
+        add_action('wp_ajax_wpvtp_push_all_changes', array($this, 'push_all_changes'));
     }
 
     /**
@@ -419,10 +420,18 @@ class WPVTP_AJAX_Handlers
             wp_die('Acceso no autorizado');
         }
 
-        $filepath = get_temp_dir() . $file;
+        // Usar el mismo directorio que create_wp_content_zip()
+        $upload_dir = wp_upload_dir();
+        $temp_dir = trailingslashit($upload_dir['basedir']) . 'wpvtp-downloads/';
+        $filepath = $temp_dir . $file;
+
+        error_log('WPVTP: Attempting to serve ZIP: ' . $filepath);
+        error_log('WPVTP: File exists: ' . (file_exists($filepath) ? 'yes' : 'no'));
 
         if (!file_exists($filepath)) {
-            wp_die('Archivo no encontrado');
+            error_log('WPVTP: File not found at: ' . $filepath);
+            error_log('WPVTP: Directory contents: ' . print_r(glob($temp_dir . '*'), true));
+            wp_die('Archivo no encontrado. Path: ' . esc_html($filepath));
         }
 
         // Headers para descarga
@@ -432,11 +441,16 @@ class WPVTP_AJAX_Handlers
         header('Pragma: no-cache');
         header('Expires: 0');
 
+        // Limpiar buffer de salida
+        if (ob_get_level()) {
+            ob_end_clean();
+        }
+
         // Enviar archivo
         readfile($filepath);
 
-        // Eliminar archivo temporal
-        unlink($filepath);
+        // Eliminar archivo temporal después de enviarlo
+        @unlink($filepath);
 
         exit;
     }
@@ -455,6 +469,26 @@ class WPVTP_AJAX_Handlers
         } else {
             wp_send_json_error('No progress found');
         }
+    }
+
+    /**
+     * Push all changes
+     */
+    public function push_all_changes()
+    {
+        check_ajax_referer('wpvtp_nonce', 'nonce');
+
+        $identifier = sanitize_text_field($_POST['identifier']);
+        $commit_message = isset($_POST['commit_message'])
+            ? sanitize_text_field($_POST['commit_message'])
+            : 'Update from local development';
+
+        require_once WPVTP_PLUGIN_DIR . 'includes/class-repo-manager.php';
+        $repo_manager = new WPVTP_Repo_Manager();
+
+        $result = $repo_manager->push_all_changes($identifier, $commit_message);
+
+        wp_send_json($result);
     }
 }
 

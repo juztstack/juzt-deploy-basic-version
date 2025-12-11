@@ -1,4 +1,5 @@
 <?php
+
 /**
  * GitHub OAuth Service Class
  *
@@ -34,11 +35,11 @@ class WPVTP_OAuth_Service
     {
         $this->session_token = get_option('wpvtp_oauth_token');
         $this->refresh_token = get_option('wpvtp_refresh_token');
-        
+
         if (!wp_next_scheduled('wpvtp_auto_refresh_token')) {
             wp_schedule_event(time(), 'hourly', 'wpvtp_auto_refresh_token');
         }
-        
+
         // Hook del cron
         add_action('wpvtp_auto_refresh_token', array($this, 'auto_refresh_token_if_needed'));
     }
@@ -96,7 +97,7 @@ class WPVTP_OAuth_Service
         if ($data && in_array($method, array('POST', 'PUT', 'PATCH'))) {
             $args['body'] = json_encode($data);
         }
-        
+
         // Log de depuración
         if (defined('WP_DEBUG') && WP_DEBUG) {
             error_log('WPVTP: Intentando conectar a: ' . $url);
@@ -228,7 +229,7 @@ class WPVTP_OAuth_Service
     public function get_all_repositories()
     {
         $result = $this->make_request('/api/github/installations/repositories');
-        
+
         if (!$result['success']) {
             return $result;
         }
@@ -364,7 +365,7 @@ class WPVTP_OAuth_Service
         }
 
         $flat_repos = array();
-        
+
         if (isset($all_repos_response['data']['installations'])) {
             foreach ($all_repos_response['data']['installations'] as $installation) {
                 if (!empty($installation['repositories'])) {
@@ -385,13 +386,13 @@ class WPVTP_OAuth_Service
     public function get_repositories_by_owner()
     {
         $result = $this->get_all_repositories();
-        
+
         if (!$result['success']) {
             return array();
         }
 
         $grouped = array();
-        
+
         if (isset($result['data']['installations'])) {
             foreach ($result['data']['installations'] as $installation) {
                 $owner = $installation['installation']['account']['login'];
@@ -401,32 +402,32 @@ class WPVTP_OAuth_Service
 
         return $grouped;
     }
-    
+
     public function handle_oauth_callback()
     {
         if (!isset($_GET['session_token'])) {
             return;
         }
-    
+
         $access_token = sanitize_text_field($_GET['session_token']);
         $refresh_token = isset($_GET['refresh_token']) ? sanitize_text_field($_GET['refresh_token']) : '';
-    
+
         update_option('wpvtp_oauth_token', $access_token);
-        
+
         if (!empty($refresh_token)) {
             update_option('wpvtp_refresh_token', $refresh_token);
         }
     }
-    
+
     public function auto_refresh_token_if_needed()
     {
         $last_refresh = get_option('wpvtp_token_last_refresh', 0);
         $refresh_interval = 7 * 60 * 60 + 50 * 60; // 7 horas 50 minutos en segundos
-        
+
         // Si han pasado más de 7h 50min desde el último refresh
         if ((time() - $last_refresh) >= $refresh_interval) {
             $result = $this->refresh_access_token();
-            
+
             if ($result['success']) {
                 update_option('wpvtp_token_last_refresh', time());
                 error_log('WPVTP: Token refrescado automáticamente');
@@ -434,5 +435,132 @@ class WPVTP_OAuth_Service
                 error_log('WPVTP: Error al refrescar token automáticamente: ' . $result['error']);
             }
         }
+    }
+
+    /**
+     * Obtener endpoint del middleware
+     * 
+     * @param string $path Path del endpoint (ej: '/api/github/user')
+     * @return string URL completa
+     */
+    private function get_middleware_endpoint($path)
+    {
+        $middleware_url = self::OAUTH_SERVICE_URL;
+
+        // Remover trailing slash
+        $middleware_url = rtrim($middleware_url, '/');
+
+        // Asegurar que path empieza con /
+        if (strpos($path, '/') !== 0) {
+            $path = '/' . $path;
+        }
+
+        return $middleware_url . $path;
+    }
+
+    /**
+     * Obtener Installation Access Token para un repositorio específico
+     * 
+     * @param string $owner Owner del repositorio
+     * @param string $repo Nombre del repositorio
+     * @return array
+     */
+    public function get_installation_token_for_repo($owner, $repo)
+    {
+        error_log('=== GET INSTALLATION TOKEN FOR REPO ===');
+        error_log('Owner: ' . $owner . ', Repo: ' . $repo);
+
+        $access_token = get_option('wpvtp_oauth_token');
+
+        if (empty($access_token)) {
+            error_log('❌ No access token available');
+            return array('success' => false, 'error' => 'No access token');
+        }
+
+        // Construir URL del middleware directamente
+        $middleware_url = self::OAUTH_SERVICE_URL;
+        $middleware_url = rtrim($middleware_url, '/');
+        $endpoint = $middleware_url . '/api/github/repos/' . $owner . '/' . $repo . '/installation-token';
+
+        error_log('Requesting installation token via middleware: ' . $endpoint);
+
+        $response = wp_remote_get($endpoint, array(
+            'headers' => array(
+                'Authorization' => 'Bearer ' . $access_token,
+                'Accept' => 'application/json'
+            ),
+            'timeout' => 30
+        ));
+
+        if (is_wp_error($response)) {
+            error_log('❌ Error getting installation token: ' . $response->get_error_message());
+            return array('success' => false, 'error' => $response->get_error_message());
+        }
+
+        $status = wp_remote_retrieve_response_code($response);
+        $body = json_decode(wp_remote_retrieve_body($response), true);
+
+        error_log('Status: ' . $status);
+        error_log('Response body: ' . json_encode($body));
+
+        if ($status >= 200 && $status < 300 && isset($body['success']) && $body['success']) {
+            $token = $body['data']['token'];
+            error_log('✅ Installation token obtained: ' . substr($token, 0, 20) . '...');
+
+            return array(
+                'success' => true,
+                'token' => $token,
+                'expires_at' => isset($body['data']['expires_at']) ? $body['data']['expires_at'] : null
+            );
+        }
+
+        $error = isset($body['error']) ? $body['error'] : 'Failed to get installation token';
+        error_log('❌ Failed to get installation token: ' . $error);
+
+        return array(
+            'success' => false,
+            'error' => $error
+        );
+    }
+
+    /**
+     * Obtener Installation Access Token desde el middleware
+     * 
+     * @param int $installation_id ID de la instalación
+     * @return array
+     */
+    public function get_installation_token($installation_id)
+    {
+        $access_token = get_option('wpvtp_oauth_token');
+
+        $endpoint = $this->get_middleware_endpoint('/api/github/installations/' . $installation_id . '/token');
+
+        $response = wp_remote_post($endpoint, array(
+            'headers' => array(
+                'Authorization' => 'Bearer ' . $access_token,
+                'Content-Type' => 'application/json'
+            ),
+            'timeout' => 30
+        ));
+
+        if (is_wp_error($response)) {
+            return array('success' => false, 'error' => $response->get_error_message());
+        }
+
+        $status_code = wp_remote_retrieve_response_code($response);
+        $body = json_decode(wp_remote_retrieve_body($response), true);
+
+        if ($status_code >= 200 && $status_code < 300 && isset($body['data']['token'])) {
+            return array(
+                'success' => true,
+                'token' => $body['data']['token'],
+                'expires_at' => $body['data']['expires_at']
+            );
+        }
+
+        return array(
+            'success' => false,
+            'error' => isset($body['error']) ? $body['error'] : 'Failed to get installation token'
+        );
     }
 }

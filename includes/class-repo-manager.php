@@ -865,7 +865,7 @@ class WPVTP_Repo_Manager
     public function create_wp_content_zip($zip_name)
     {
         $this->cleanup_old_zips();
-        
+
         $zip_name = sanitize_file_name($zip_name);
 
         if (empty($zip_name)) {
@@ -899,7 +899,7 @@ class WPVTP_Repo_Manager
         }
 
         $archive = new PclZip($zip_filepath);
-        
+
         // Lista de directorios importantes a incluir
         $wp_content_path = WP_CONTENT_DIR;
         $directories_to_include = array(
@@ -908,7 +908,7 @@ class WPVTP_Repo_Manager
             'uploads',
             'mu-plugins'
         );
-        
+
         $items_to_add = array();
         foreach ($directories_to_include as $dir) {
             $full_path = $wp_content_path . '/' . $dir;
@@ -916,45 +916,49 @@ class WPVTP_Repo_Manager
                 $items_to_add[] = $full_path;
             }
         }
-        
+
         if (empty($items_to_add)) {
             return array(
                 'success' => false,
                 'error' => 'No se encontraron directorios para incluir en el ZIP'
             );
         }
-        
+
         error_log('WPVTP: Adding directories: ' . implode(', ', $directories_to_include));
-        
+
         // Agregar cada directorio al ZIP
         $first = true;
         foreach ($items_to_add as $item) {
             $dir_name = basename($item);
-            
+
             if ($first) {
                 // Primera adición: crear el archivo
                 $result = $archive->create(
                     $item,
-                    PCLZIP_OPT_REMOVE_PATH, $wp_content_path,
-                    PCLZIP_OPT_ADD_PATH, 'wp-content'
+                    PCLZIP_OPT_REMOVE_PATH,
+                    $wp_content_path,
+                    PCLZIP_OPT_ADD_PATH,
+                    'wp-content'
                 );
                 $first = false;
             } else {
                 // Siguientes adiciones: agregar al archivo existente
                 $result = $archive->add(
                     $item,
-                    PCLZIP_OPT_REMOVE_PATH, $wp_content_path,
-                    PCLZIP_OPT_ADD_PATH, 'wp-content'
+                    PCLZIP_OPT_REMOVE_PATH,
+                    $wp_content_path,
+                    PCLZIP_OPT_ADD_PATH,
+                    'wp-content'
                 );
             }
-            
+
             if ($result == 0) {
                 $error = $archive->errorInfo(true);
                 error_log('WPVTP PclZip Error adding ' . $dir_name . ': ' . $error);
                 // Continuar con el siguiente directorio en lugar de fallar completamente
                 continue;
             }
-            
+
             error_log('WPVTP: Added ' . $dir_name . ' successfully');
         }
 
@@ -984,14 +988,14 @@ class WPVTP_Repo_Manager
     {
         $upload_dir = wp_upload_dir();
         $temp_dir = trailingslashit($upload_dir['basedir']) . 'wpvtp-downloads/';
-        
+
         if (!is_dir($temp_dir)) {
             return;
         }
-        
+
         $files = glob($temp_dir . '*.zip');
         $now = time();
-        
+
         foreach ($files as $file) {
             if (is_file($file)) {
                 if ($now - filemtime($file) >= 3600) {
@@ -1133,5 +1137,220 @@ class WPVTP_Repo_Manager
         }
 
         return $result;
+    }
+
+    /**
+     * Push all changes (detecta archivos modificados y hace commit)
+     * 
+     * @param string $identifier Identificador del repositorio
+     * @param string $commit_message Mensaje del commit
+     * @return array
+     */
+    public function push_all_changes($identifier, $commit_message = 'Update from local development')
+    {
+        error_log('=== PUSH ALL CHANGES START ===');
+
+        $git = $this->get_git_instance();
+        $repo_info = $this->get_repo_by_identifier($identifier);
+
+        if (!$repo_info) {
+            return array('success' => false, 'error' => 'Repositorio no encontrado');
+        }
+
+        $local_path = $this->resolve_local_path($repo_info['folder_name'], $repo_info['repo_type']);
+
+        error_log('Local path: ' . $local_path);
+
+        // Obtener token apropiado
+        $access_token = $this->get_repo_token($local_path);
+
+        error_log('Token obtained: ' . substr($access_token, 0, 20) . '...');
+        error_log('Token type: ' . (strpos($access_token, 'ghs_') === 0 ? 'Installation Token' : 'OAuth Token'));
+
+        if (empty($access_token)) {
+            return array('success' => false, 'error' => 'Token de acceso requerido');
+        }
+
+        $mode = $this->get_git_mode();
+        error_log('Git mode: ' . $mode);
+
+        // CLI Mode: commit y push de todo
+        if ($mode === 'cli') {
+            return $git->commit_and_push($local_path, '.', $commit_message, $access_token);
+        }
+
+        // API Mode: detectar archivos modificados
+        $modified_files = $this->detect_modified_files($local_path);
+
+        error_log('Modified files: ' . count($modified_files));
+        error_log('Files: ' . print_r($modified_files, true));
+
+        if (empty($modified_files)) {
+            return array('success' => true, 'message' => 'No hay cambios para hacer push');
+        }
+
+        $results = array();
+        $success_count = 0;
+        $error_count = 0;
+
+        foreach ($modified_files as $file) {
+            error_log('Attempting to commit: ' . $file);
+            $result = $git->commit_and_push($local_path, $file, $commit_message, $access_token);
+
+            error_log('Result for ' . $file . ': ' . json_encode($result));
+
+            if ($result['success']) {
+                $success_count++;
+            } else {
+                $error_count++;
+                $results[] = $file . ': ' . $result['error'];
+            }
+        }
+
+        error_log('=== PUSH ALL CHANGES END ===');
+
+        if ($error_count > 0) {
+            return array(
+                'success' => false,
+                'error' => sprintf('%d archivos fallaron, %d exitosos', $error_count, $success_count),
+                'details' => $results
+            );
+        }
+
+        return array(
+            'success' => true,
+            'message' => sprintf('Push exitoso: %d archivos actualizados', $success_count)
+        );
+    }
+
+    /**
+     * Detectar archivos modificados en un repositorio (para API mode)
+     * 
+     * @param string $repo_path Path del repositorio
+     * @return array Lista de archivos modificados (paths relativos)
+     */
+    private function detect_modified_files($repo_path)
+    {
+        $metadata = $this->get_repo_metadata_from_file($repo_path);
+
+        if (!$metadata) {
+            return array();
+        }
+
+        $owner = $metadata['owner'];
+        $repo = $metadata['repo'];
+        $branch = $metadata['branch'];
+        $access_token = get_option('wpvtp_oauth_token');
+
+        // Obtener árbol de GitHub para comparar
+        $api_url = "https://api.github.com/repos/{$owner}/{$repo}/git/trees/{$branch}?recursive=1";
+
+        $response = wp_remote_get($api_url, array(
+            'headers' => array(
+                'Authorization' => 'Bearer ' . $access_token,
+                'Accept' => 'application/vnd.github+json'
+            )
+        ));
+
+        if (is_wp_error($response)) {
+            return array();
+        }
+
+        $body = json_decode(wp_remote_retrieve_body($response), true);
+        $remote_files = array();
+
+        if (isset($body['tree'])) {
+            foreach ($body['tree'] as $item) {
+                if ($item['type'] === 'blob') {
+                    $remote_files[$item['path']] = $item['sha'];
+                }
+            }
+        }
+
+        // Comparar archivos locales con remotos
+        $modified = array();
+        $iterator = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($repo_path, RecursiveDirectoryIterator::SKIP_DOTS)
+        );
+
+        foreach ($iterator as $file) {
+            if ($file->isFile()) {
+                $relative_path = str_replace($repo_path . '/', '', $file->getPathname());
+
+                // Ignorar metadata y archivos ocultos
+                if ($relative_path === '.wpvtp_metadata' || strpos($relative_path, '.') === 0) {
+                    continue;
+                }
+
+                $local_content = file_get_contents($file->getPathname());
+                $local_sha = sha1("blob " . strlen($local_content) . "\0" . $local_content);
+
+                // Si no existe en remoto o el SHA es diferente
+                if (!isset($remote_files[$relative_path]) || $remote_files[$relative_path] !== $local_sha) {
+                    $modified[] = $relative_path;
+                }
+            }
+        }
+
+        return $modified;
+    }
+
+    /**
+     * Obtener metadata de archivo (helper para detect_modified_files)
+     */
+    private function get_repo_metadata_from_file($repo_path)
+    {
+        $metadata_file = $repo_path . '/.wpvtp_metadata';
+
+        if (!file_exists($metadata_file)) {
+            return false;
+        }
+
+        return json_decode(file_get_contents($metadata_file), true);
+    }
+
+    /**
+     * Obtener token apropiado para un repositorio
+     * Intenta obtener Installation Token, si falla usa OAuth token
+     * 
+     * @param string $repo_path Path del repositorio
+     * @return string Token de acceso
+     */
+    private function get_repo_token($repo_path)
+    {
+        error_log('=== GET REPO TOKEN ===');
+
+        $metadata = $this->get_repo_metadata_from_file($repo_path);
+
+        if (!$metadata) {
+            error_log('No metadata found, using OAuth token');
+            return get_option('wpvtp_oauth_token');
+        }
+
+        $owner = $metadata['owner'];
+        $repo = $metadata['repo'];
+
+        error_log('Owner: ' . $owner);
+        error_log('Repo: ' . $repo);
+
+        // Intentar obtener Installation Token
+        require_once WPVTP_PLUGIN_DIR . 'includes/class-oauth-service.php';
+        $oauth_service = new WPVTP_OAuth_Service();
+
+        $token_result = $oauth_service->get_installation_token_for_repo($owner, $repo);
+
+        error_log('Installation token result: ' . json_encode($token_result));
+
+        if ($token_result['success']) {
+            error_log('✅ Using Installation Token for ' . $owner . '/' . $repo);
+            error_log('Token starts with: ' . substr($token_result['token'], 0, 20));
+            return $token_result['token'];
+        }
+
+        // Fallback a OAuth token
+        $oauth_token = get_option('wpvtp_oauth_token');
+        error_log('⚠️ Using OAuth Token (fallback) for ' . $owner . '/' . $repo);
+        error_log('OAuth token starts with: ' . substr($oauth_token, 0, 20));
+        return $oauth_token;
     }
 }
