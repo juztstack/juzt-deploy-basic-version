@@ -208,6 +208,9 @@ class WPVTP_Admin_Interface
                 echo '<td>';
                 if ($repo['exists']) {
                     echo '<button class="button button-small wpvtp-update-repo" data-path="' . esc_attr($repo['local_path']) . '">Update</button> ';
+
+                    echo '<button class="wpvtp-btn wpvtp-btn-success wpvtp-push-all-btn" data-identifier="' . esc_attr($repo['folder_name']) . '"> 📤 Push All</button>';
+
                     echo '<button class="button button-small wpvtp-switch-branch" data-path="' . esc_attr($repo['local_path']) . '" data-repo-url="' . esc_attr($repo['repo_url']) . '">Switch Branch</button> ';
 
                     if ($repo['repo_type'] === 'theme') {

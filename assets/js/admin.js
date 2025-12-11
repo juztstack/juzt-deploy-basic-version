@@ -31,14 +31,14 @@
   function startProgressTracking(jobId, onComplete, onError, customContainer) {
     const progressBar = $(
       '<div class="wpvtp-progress-container" style="margin: 20px 0;">' +
-        '<div class="wpvtp-progress-info" style="margin-bottom: 10px;">' +
-        '<strong class="wpvtp-progress-message">Iniciando...</strong>' +
-        '<span class="wpvtp-progress-percentage" style="float: right;">0%</span>' +
-        "</div>" +
-        '<div class="wpvtp-progress-bar-bg" style="background: #e0e0e0; height: 20px; border-radius: 10px; overflow: hidden;">' +
-        '<div class="wpvtp-progress-bar" style="background: #0073aa; height: 100%; width: 0%; transition: width 0.3s;"></div>' +
-        "</div>" +
-        "</div>"
+      '<div class="wpvtp-progress-info" style="margin-bottom: 10px;">' +
+      '<strong class="wpvtp-progress-message">Iniciando...</strong>' +
+      '<span class="wpvtp-progress-percentage" style="float: right;">0%</span>' +
+      "</div>" +
+      '<div class="wpvtp-progress-bar-bg" style="background: #e0e0e0; height: 20px; border-radius: 10px; overflow: hidden;">' +
+      '<div class="wpvtp-progress-bar" style="background: #0073aa; height: 100%; width: 0%; transition: width 0.3s;"></div>' +
+      "</div>" +
+      "</div>"
     );
 
     if (customContainer) {
@@ -132,10 +132,10 @@
           if (response.success) {
             showNotification(
               "✅ ZIP created" +
-                response.data.filename +
-                " (" +
-                response.data.size +
-                ")",
+              response.data.filename +
+              " (" +
+              response.data.size +
+              ")",
               "success"
             );
 
@@ -372,6 +372,33 @@
 
       updateRepository(localPath, button);
     });
+
+    //Push
+    $(document).on("click", ".wpvtp-push-all-btn", function (e) {
+      const btn = jQuery(this);
+      const identifier = btn.data('identifier');
+      const commitMessage = prompt('Commit message:', 'Update from local development');
+
+      if (!commitMessage) return;
+
+      btn.prop('disabled', true).text('Pushing...');
+
+      jQuery.post(ajaxurl, {
+        action: 'wpvtp_push_all_changes',
+        nonce: wpvtp_ajax.nonce,
+        identifier: identifier,
+        commit_message: commitMessage
+      }, function (response) {
+        if (response.success) {
+          alert('✅ ' + response.message);
+        } else {
+          alert('❌ ' + response.error);
+        }
+        btn.prop('disabled', false).text('📤 Push All');
+      });
+    });
+
+
 
     // Switch branch
     $(document).on("click", ".wpvtp-switch-branch", function (e) {
@@ -723,8 +750,7 @@
 
     const summary = `
       <h4>Installation Summary</h4>
-      <p><strong>Repository:</strong> ${
-        selectedRepo.full_name
+      <p><strong>Repository:</strong> ${selectedRepo.full_name
       } (${privacyBadge})</p>
       <p><strong>Branch:</strong> ${branch}</p>
       <p><strong>Type:</strong> ${typeLabel}</p>
