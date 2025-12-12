@@ -4,7 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![WordPress](https://img.shields.io/badge/WordPress-5.8+-blue.svg)](https://wordpress.org/)
-[![Version](https://img.shields.io/badge/version-1.12.0-green.svg)](https://github.com/tu-usuario/juzt-deploy/releases)
+[![Version](https://img.shields.io/badge/version-1.13.0-green.svg)](https://github.com/tu-usuario/juzt-deploy/releases)
 
 ## 📋 Overview
 
