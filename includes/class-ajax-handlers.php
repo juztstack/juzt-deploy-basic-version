@@ -52,6 +52,49 @@ class WPVTP_AJAX_Handlers
         add_action('wp_ajax_wpvtp_delete_commit', array($this, 'delete_commit'));
         add_action('wp_ajax_wpvtp_get_progress', array($this, 'get_progress'));
         add_action('wp_ajax_wpvtp_push_all_changes', array($this, 'push_all_changes'));
+        add_action('wp_ajax_wpvtp_get_repositories_by_installation', array($this, 'get_repositories_by_installation'));
+        add_action('wp_ajax_wpvtp_search_repositories_by_name', array($this, 'wpvtp_search_repositories_by_name'));
+        add_action('wp_ajax_wpvtp_bulk_delete_commits', array($this, 'bulk_delete_commits'));
+    }
+
+    public function wpvtp_search_repositories_by_name()
+    {
+        check_ajax_referer('wpvtp_nonce', 'nonce');
+
+        $term = sanitize_text_field($_POST['term']);
+        $owner = sanitize_text_field($_POST['owner']);
+
+        if (!$this->oauth_service->is_connected()) {
+            wp_send_json_error('No hay token de GitHub configurado.');
+            return;
+        }
+
+        $result = $this->oauth_service->search_repositories_by_name($owner, $term );
+
+        if ($result['success']) {
+            wp_send_json_success($result['data']);
+        } else {
+            wp_send_json_error($result['error']);
+        }
+    }
+
+    public function get_repositories_by_installation(){
+        //check_ajax_referer('wpvtp_nonce', 'nonce');
+
+        $installation_id = intval($_POST['installation_id']);
+
+        if (!$this->oauth_service->is_connected()) {
+            wp_send_json_error('No hay token de GitHub configurado.');
+            return;
+        }
+
+        $result = $this->oauth_service->get_repositories_by_installation($installation_id);
+
+        if ($result['success']) {
+            wp_send_json_success($result['data']);
+        } else {
+            wp_send_json_error($result['error']);
+        }
     }
 
     /**
@@ -110,13 +153,14 @@ class WPVTP_AJAX_Handlers
         // Obtener información del usuario
         $user_result = $this->oauth_service->get_user_info();
 
-        if (!$user_result['success']) {
-            wp_send_json_error($user_result['error']);
+        if (!$user_result['user']['success'] || !$user_result['orgs']['success']) {
+            wp_send_json_error('Error al obtener información del usuario: ' . $user_result['error']);
             return;
         }
 
         // Obtener instalaciones de la GitHub App
         $installations_result = $this->oauth_service->get_installations();
+
 
         if (!$installations_result['success']) {
             // Si falla, usar las organizaciones del usuario como fallback
@@ -125,13 +169,13 @@ class WPVTP_AJAX_Handlers
             // Convertir instalaciones a formato de organizaciones
             $organizations = array();
 
-            if (isset($installations_result['data']['data'])) {
-                foreach ($installations_result['data']['data'] as $installation) {
+            if (isset($installations_result['data']['installations'])) {
+                foreach ($installations_result['data']['installations'] as $installation) {
                     $account = $installation['account'];
                     $organizations[] = array(
                         'login' => $account['login'],
                         'type' => $account['type'],
-                        'avatar_url' => isset($account['avatar_url']) ? $account['avatar_url'] : '',
+                        'avatar_url' => isset($user_result['user']['data']['avatar_url']) ? $user_result['user']['data']['avatar_url'] : '',
                         'description' => $installation['target_type'] === 'User' ? 'Tu cuenta personal' : 'Organización',
                         'installation_id' => $installation['id'] // Guardar ID de instalación
                     );
@@ -140,7 +184,7 @@ class WPVTP_AJAX_Handlers
         }
 
         // Agregar el usuario personal si no está en las instalaciones
-        $user_login = $user_result['data']['user']['login'];
+        $user_login = $user_result['user']['data']['login'];
         $user_exists = false;
 
         foreach ($organizations as $org) {
@@ -154,13 +198,13 @@ class WPVTP_AJAX_Handlers
             array_unshift($organizations, array(
                 'login' => $user_login,
                 'type' => 'User',
-                'avatar_url' => isset($user_result['data']['user']['avatar_url']) ? $user_result['data']['user']['avatar_url'] : '',
+                'avatar_url' => isset($user_result['user']['data']['avatar_url']) ? $user_result['user']['data']['avatar_url'] : '',
                 'description' => 'Tu cuenta personal'
             ));
         }
 
         // Guardar información del usuario para uso posterior
-        update_option('wpvtp_github_user', $user_result['data']['user']);
+        update_option('wpvtp_github_user', $user_result['user']['data']);
 
         wp_send_json_success($organizations);
     }
@@ -176,7 +220,7 @@ class WPVTP_AJAX_Handlers
      */
     public function get_repositories()
     {
-        check_ajax_referer('wpvtp_nonce', 'nonce');
+        //check_ajax_referer('wpvtp_nonce', 'nonce');
 
         $owner = sanitize_text_field($_POST['owner']);
         $type = sanitize_text_field($_POST['type']);
@@ -265,6 +309,36 @@ class WPVTP_AJAX_Handlers
             wp_send_json_success($result['data']);
         } else {
             wp_send_json_error($result['error']);
+        }
+    }
+
+    public function bulk_delete_commits(){
+        check_ajax_referer('wpvtp_nonce', 'nonce');
+
+        global $wpdb;
+        $table_name = $wpdb->prefix . 'wpvtp_commits_queue';
+
+        $commit_ids = isset($_POST['commit_ids']) ? $_POST['commit_ids'] : array();
+
+        $commit_ids = json_decode(stripslashes($commit_ids), true);
+
+        if (empty($commit_ids) || !is_array($commit_ids)) {
+            wp_send_json_error('No se proporcionaron IDs de commits válidos.');
+            return;
+        }
+
+        // Sanitizar IDs
+        $commit_ids = array_map('intval', $commit_ids);
+        $placeholders = implode(',', array_fill(0, count($commit_ids), '%d'));
+
+        $deleted = $wpdb->query(
+            $wpdb->prepare("DELETE FROM $table_name WHERE id IN ($placeholders)", ...$commit_ids)
+        );
+
+        if ($deleted !== false) {
+            wp_send_json_success('Commits eliminados: ' . $deleted);
+        } else {
+            wp_send_json_error('Error al eliminar commits.');
         }
     }
 

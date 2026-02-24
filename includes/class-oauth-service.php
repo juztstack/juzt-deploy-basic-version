@@ -20,7 +20,8 @@ class WPVTP_OAuth_Service
     /**
      * URL del servicio middleware
      */
-    const OAUTH_SERVICE_URL = 'https://deploy.juztstack.dev';
+    const OAUTH_SERVICE_URL = 'https://local.juztstack.dev/juztdeploy';
+    const GITHUB_API_URL = 'https://api.github.com';
 
     /**
      * Propiedades de la clase
@@ -52,7 +53,85 @@ class WPVTP_OAuth_Service
     public function get_authorization_url()
     {
         $return_url = urlencode(admin_url('admin.php?page=wp-versions-themes-plugins&tab=settings'));
-        return self::OAUTH_SERVICE_URL . '/auth/github?return_url=' . $return_url;
+        return self::OAUTH_SERVICE_URL . '/auth/github?redirect_uri=' . $return_url;
+    }
+
+    public function make_github_request($endpoint, $method = 'GET', $data = null)
+    {
+        // Verificar y refrescar token si es necesario
+        if (empty($this->session_token) && !empty($this->refresh_token)) {
+            $refresh_result = $this->refresh_access_token();
+            if (!$refresh_result['success']) {
+                return $refresh_result;
+            }
+            $this->session_token = $refresh_result['data']['session_token'];
+        }
+
+        if (empty($this->session_token)) {
+            return array(
+                'success' => false,
+                'error' => 'No hay token de sesión. Vuelve a conectar con GitHub.'
+            );
+        }
+
+        $url = self::GITHUB_API_URL . $endpoint;
+
+        $headers = array(
+            'Authorization' => 'Bearer ' . $this->session_token,
+            'Content-Type' => 'application/json'
+        );
+
+        $args = array(
+            'method' => $method,
+            'headers' => $headers,
+            'timeout' => 30
+        );
+
+        if ($data && in_array($method, array('POST', 'PUT', 'PATCH'))) {
+            $args['body'] = json_encode($data);
+        }
+
+        // Log de depuración
+        if (defined('WP_DEBUG') && WP_DEBUG) {
+            error_log('WPVTP: Intentando conectar a: ' . $url);
+        }
+
+        $response = wp_remote_request($url, $args);
+
+        if (is_wp_error($response)) {
+            return array(
+                'success' => false,
+                'error' => 'Error de conexión con el servicio: ' . $response->get_error_message()
+            );
+        }
+
+        $code = wp_remote_retrieve_response_code($response);
+        $body = wp_remote_retrieve_body($response);
+        $data_response = json_decode($body, true);
+
+        if ($code >= 200 && $code < 300) {
+            //var_dump($data_response);
+
+            return array(
+                'success' => true,
+                'data' => $data_response
+            );
+        } else {
+            // Manejar token expirado o inválido
+            if ($code === 401) {
+                $this->disconnect();
+                return array(
+                    'success' => false,
+                    'error' => 'Sesión expirada. Vuelve a conectar con GitHub.',
+                    'code' => 401
+                );
+            }
+
+            return array(
+                'success' => false,
+                'error' => isset($data_response['error']) ? $data_response['error'] : 'Error del servicio (HTTP ' . $code . '): ' . $body
+            );
+        }
     }
 
     /**
@@ -174,11 +253,11 @@ class WPVTP_OAuth_Service
         $body = wp_remote_retrieve_body($response);
         $data_response = json_decode($body, true);
 
-        if ($code === 200 && isset($data_response['session_token'])) {
+        if ($code === 200 && isset($data_response['access_token'])) {
             // Almacenar el nuevo token
-            update_option('wpvtp_oauth_token', $data_response['session_token']);
+            update_option('wpvtp_oauth_token', $data_response['access_token']);
             update_option('wpvtp_refresh_token', $data_response['refresh_token']);
-            $this->session_token = $data_response['session_token'];
+            $this->session_token = $data_response['access_token'];
             $this->refresh_token = $data_response['refresh_token'];
             return array(
                 'success' => true,
@@ -199,7 +278,14 @@ class WPVTP_OAuth_Service
      */
     public function get_user_info()
     {
-        return $this->make_request('/api/github/user');
+        $user = $this->make_github_request('/user');
+        $orgs = $this->make_github_request('/user/orgs');
+
+        $response = [];
+        $response['user'] = $user;
+        $response['orgs'] = $orgs;
+
+        return $response;
     }
 
     /**
@@ -248,7 +334,10 @@ class WPVTP_OAuth_Service
      */
     public function get_installations()
     {
-        return $this->make_request('/api/github/installations');
+        $end_point = '/user/installations';
+        $response = $this->make_github_request($end_point);
+        //var_dump($response); // Debug: Verificar respuesta de instalaciones
+        return $response;
     }
 
     /**
@@ -259,7 +348,7 @@ class WPVTP_OAuth_Service
      */
     public function get_installation_repositories($installation_id)
     {
-        return $this->make_request('/api/github/installations/' . $installation_id . '/repositories');
+        return $this->make_github_request('/user/installations/' . $installation_id . '/repositories');
     }
 
     /**
@@ -275,7 +364,22 @@ class WPVTP_OAuth_Service
      */
     public function get_repositories($owner, $type = 'user')
     {
-        return $this->make_request('/api/github/repos/' . urlencode($owner) . '/' . urlencode($type));
+        $url = '/api/github/repos/' . urlencode($owner) . '/' . urlencode($type);
+        $all_repositories = $this->make_github_request($url);
+        return $all_repositories;
+    }
+
+    public function get_repositories_by_installation($installation_id, $page = 1)
+    {
+        $endpoint = '/user/installations/' . $installation_id . '/repositories?per_page=10&page=' . $page;
+        return $this->make_github_request($endpoint);
+    }
+
+    public function search_repositories_by_name($owner, $term)
+    {
+        $search = $owner ? 'user:' . $owner . ' ' . $term : $term;
+        $endpoint = '/search/repositories?q=' . urlencode($search) . '&per_page=30';
+        return $this->make_github_request($endpoint);
     }
 
     /**
@@ -290,7 +394,7 @@ class WPVTP_OAuth_Service
      */
     public function get_branches($owner, $repo)
     {
-        return $this->make_request('/api/github/repos/' . urlencode($owner) . '/' . urlencode($repo) . '/branches');
+        return $this->make_github_request('/repos/' . urlencode($owner) . '/' . urlencode($repo) . '/branches');
     }
 
     /**

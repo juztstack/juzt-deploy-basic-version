@@ -5,10 +5,24 @@ All notable changes to Juzt Deploy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
-### Planned
-- Rollback functionality
-- Team collaboration features
+## [Notes]
+
+This version have complete feature planed on roadmap. The next versions is to improve a few things about the security or UX/UI.
+
+Comming soom, the PRO version have more features a new UX/UI more ease to implement cloning the repositories, in addition, the PRO Version, were able to have, integrations with GitbLab and Azure Devops.
+
+## [1.14.0] - 2016-02-24
+
+- Fix issues for clone througth API
+- Implement CronJob every 4 hours to refresh token authentication.
+- Update UI for repositories list.
+- Implemente Search on select repositories for improve performance on installation.
+
+## [1.13.0] - 2025-12-23
+
+- Fix issues with download wp-content path
+- Fix issues with load paginate repositories
+- Add button on settings page for set up Github App on other github accounts.
 
 ## [1.9.0] - 2025-11-15
 

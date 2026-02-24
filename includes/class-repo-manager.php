@@ -33,14 +33,23 @@ class WPVTP_Repo_Manager
         require_once WPVTP_PLUGIN_DIR . 'includes/class-git-interface.php';
         require_once WPVTP_PLUGIN_DIR . 'includes/class-git-cli.php';
         require_once WPVTP_PLUGIN_DIR . 'includes/class-git-api.php';
-
+        add_filter('wpvtp_test', array($this, 'test_filters') ,10,2);
         add_filter('wpvtp_queue_commit', array($this, 'handle_queue_commit_filter'), 10, 4);
+    }
+
+    public function test_filters($result, $value){
+        error_log("AQUI" . print_r($result, true) . '' . print_r($value, true));
+        return $result;
     }
 
     // AGREGAR nuevo método:
     public function handle_queue_commit_filter($result, $theme_path, $commit_message, $file_path = null)
     {
         error_log('🔄 wpvtp_queue_commit called - Stack: ' . wp_debug_backtrace_summary());
+        $allow_auto_commit = get_option('wpvtp_auto_commit', 'no') === 'yes';
+        if (!$allow_auto_commit) {
+            return false;
+        }
         return $this->queue_commit($theme_path, $commit_message, $file_path);
     }
 

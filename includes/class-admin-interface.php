@@ -46,7 +46,7 @@ class WPVTP_Admin_Interface
     {
         $this->current_page = isset($_GET['tab']) ? sanitize_text_field($_GET['tab']) : 'dashboard';
 
-        echo '<div class="wrap wpvtp-admin">';
+        echo '<div class="wrap wpvtp-admin" style="max-width: 1024px; margin: 20px 15px 20px 0px;">';
         echo '<h1>Juzt Deploy</h1>';
         echo '<p>A fast way to deploy themes and plugins from Github to Wordpress site.</p>';
         echo '<p>Created by Jesus Uzcategui and Juzt Stack Project.</p>';
@@ -111,7 +111,6 @@ class WPVTP_Admin_Interface
     private function render_dashboard_page()
     {
         echo '<div class="wpvtp-dashboard">';
-        echo '<h2>Dashboard</h2>';
 
         if (!$this->oauth_service->is_connected()) {
             echo '<div class="notice notice-warning">';
@@ -170,18 +169,7 @@ class WPVTP_Admin_Interface
 
         // Repository Table
         if (!empty($repos)) {
-            echo '<h3>Installed Repositories</h3>';
-            echo '<table class="fixed wp-list-table widefat striped">';
-            echo '<thead><tr>';
-            echo '<th>Name</th>';
-            echo '<th>Type</th>';
-            echo '<th>Current Branch</th>';
-            echo '<th>Last Updated</th>';
-            echo '<th>Status</th>';
-            echo '<th>Actions</th>';
-            echo '</tr></thead>';
-            echo '<tbody>';
-
+            echo '<div style="background: white; padding: 20px; border-radius: 8px; display: grid; gap: 20px; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));">';
             foreach ($repos as $repo) {
                 $repo_type_label = $repo['repo_type'] === 'theme' ? '🎨 Theme' : '🔌 Plugin';
                 $status_label = '';
@@ -198,31 +186,28 @@ class WPVTP_Admin_Interface
                     $status_color = '#00a32a';
                 }
 
-                echo '<tr>';
-                echo '<td><strong>' . esc_html($repo['repo_name']) . '</strong></td>';
-                echo '<td>' . $repo_type_label . '</td>';
-                echo '<td><code>' . esc_html($repo['current_branch']) . '</code></td>';
-                echo '<td>' . human_time_diff(strtotime($repo['last_update'])) . ' ago</td>';
-                echo '<td><span style="color: ' . esc_attr($status_color) . ';">' . $status_label . '</span></td>';
-
-                echo '<td>';
-                if ($repo['exists']) {
+                echo '<div class="wpvtp-repo-card" style="background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #e9ecef;">';
+                echo '<h4 style="margin: 0 0 10px 0;">' . esc_html($repo['repo_name']) . '</h4>';
+                echo '<p style="margin: 5px 0;"><strong>Type:</strong> ' . esc_html($repo_type_label) . '</p>';
+                echo '<p style="margin: 5px 0;"><strong>Branch:</strong> <code>' . esc_html($repo['current_branch']) . '</code></p>';
+                echo '<p style="margin: 5px 0;"><span style="color: ' . esc_attr($status_color) . ';">' . esc_html($status_label) . '</span></p>';
+                echo '<div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 15px;">';
+                
+                if ($repo['exists']):
+                    echo '<button class="button button-small button-link-delete wpvtp-remove-repo" data-path="' . esc_attr($repo['local_path']) . '" data-name="' . esc_attr($repo['repo_name']) . '">Delete</button>';
                     echo '<button class="button button-small wpvtp-update-repo" data-path="' . esc_attr($repo['local_path']) . '">Update</button> ';
-
-                    echo '<button class="wpvtp-btn wpvtp-btn-success wpvtp-push-all-btn" data-identifier="' . esc_attr($repo['folder_name']) . '"> 📤 Push All</button>';
-
+                    echo '<button class="wpvtp-btn wpvtp-btn-success wpvtp-push-all-btn" data-identifier="' . esc_attr($repo['folder_name']) . '"> 📤 Push</button>';
                     echo '<button class="button button-small wpvtp-switch-branch" data-path="' . esc_attr($repo['local_path']) . '" data-repo-url="' . esc_attr($repo['repo_url']) . '">Switch Branch</button> ';
-
                     if ($repo['repo_type'] === 'theme') {
                         $theme_handle = basename($repo['local_path']);
                         echo '<a href="' . home_url('?wpvtheme=' . $theme_handle) . '" target="_blank" class="button button-small">Preview</a> ';
                     }
-                }
-                echo '<button class="button button-small button-link-delete wpvtp-remove-repo" data-path="' . esc_attr($repo['local_path']) . '" data-name="' . esc_attr($repo['repo_name']) . '">Delete</button>';
-                echo '</td>';
-                echo '</tr>';
+                endif;
+
+                echo '</div>';
+                echo '</div>';
             }
-            echo '</tbody></table>';
+            echo '</div>';
         } else {
             echo '<div class="notice notice-info">';
             echo '<p>You have no repositories installed yet. <a href="' . admin_url('admin.php?page=wp-versions-themes-plugins&tab=install') . '">Install your first repository</a>.</p>';
@@ -264,9 +249,13 @@ class WPVTP_Admin_Interface
         // Step 2: Repository
         echo '<div class="wpvtp-form-step" id="step-repository" style="display: none; margin-top: 30px;">';
         echo '<h3>2. Select Repository</h3>';
+        echo '<div style="display: flex; flex-direction: column; gap: 10px; width: 100%; max-width: 400px;">';
+        echo '<input placeholder="Search by name" type="search" id="wpvtp-repository-search" style="width: 100%; padding: 8px;" disabled>';
         echo '<select id="wpvtp-repository" style="width: 100%; max-width: 400px; padding: 8px;" disabled>';
         echo '<option value="">First select an organization</option>';
         echo '</select>';
+        echo '</div>';
+        
         echo '<div id="wpvtp-repo-info" style="display: none; margin-top: 15px; padding: 15px; background: #f8f9fa; border-radius: 5px;">';
         echo '<h4>Repository Information</h4>';
         echo '<p><strong>Description:</strong> <span id="repo-description"></span></p>';
@@ -339,6 +328,10 @@ class WPVTP_Admin_Interface
         }
 
         update_option('wpvtp_force_git_mode', $force_mode);
+
+        $auto_commit = sanitize_text_field($_POST['auto_commit'] ?? 'no');
+
+        update_option('wpvtp_auto_commit', $auto_commit);
 
         // Re-detectar el modo
         if ($force_mode === 'auto') {
@@ -470,6 +463,16 @@ class WPVTP_Admin_Interface
         echo '<p class="description">Auto detect recommended. Force CLI requires git installed. API works everywhere but slower commits.</p>';
         echo '</td>';
         echo '</tr>';
+        echo '<tr>';
+        echo '<th><label for="auto_commit">Activate autocommit</label></th>';
+        echo '<td>';
+        echo '<select name="auto_commit" id="auto_commit" class="regular-text">';
+        echo '<option value="yes"' . selected(get_option('wpvtp_auto_commit', 'no'), 'yes', false) . '>Yes</option>';
+        echo '<option value="no"' . selected(get_option('wpvtp_auto_commit', 'no'), 'no', false) . '>No</option>';
+        echo '</select>';
+        echo '<p class="description">Auto detect recommended. Force CLI requires git installed. API works everywhere but slower commits.</p>';
+        echo '</td>';
+        echo '</tr>';
         echo '</table>';
 
         echo '<p class="submit">';
@@ -515,6 +518,10 @@ class WPVTP_Admin_Interface
 
         echo '<table class="wp-list-table widefat fixed striped">';
         echo '<thead><tr>';
+        echo '<th>
+            <input type="checkbox" class="wpvtp-select-all-commits">
+            <button type="button" class="button button-small button-link-delete wpvtp-bulk-delete" disabled>Delete</button> 
+            </th>';
         echo '<th>ID</th>';
         echo '<th>Path</th>';
         echo '<th>Message</th>';
@@ -531,6 +538,7 @@ class WPVTP_Admin_Interface
             $status_icon = $commit['status'] === 'completed' ? '✅' : ($commit['status'] === 'failed' ? '❌' : '⏳');
 
             echo '<tr>';
+            echo '<td><input type="checkbox" class="wpvtp-commit-checkbox" data-id="' . $commit['id'] . '" value="' . $commit['id'] . '"></td>';
             echo '<td>' . $commit['id'] . '</td>';
             echo '<td><code>' . basename($commit['theme_path']) . '</code></td>';
             echo '<td>' . esc_html(substr($commit['commit_message'], 0, 50)) . '</td>';

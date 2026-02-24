@@ -4,7 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![WordPress](https://img.shields.io/badge/WordPress-5.8+-blue.svg)](https://wordpress.org/)
-[![Version](https://img.shields.io/badge/version-1.13.0-green.svg)](https://github.com/tu-usuario/juzt-deploy/releases)
+[![Version](https://img.shields.io/badge/version-1.14.0-green.svg)](https://github.com/tu-usuario/juzt-deploy/releases)
 
 ## 📋 Overview
 
@@ -95,10 +95,11 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## 📝 Recent Changes
 
-### Latest Release (v1.11.0)
-- Fix issues with download wp-content path
-- Fix issues with load paginate repositories
-- Add button on settings page for set up Github App on other github accounts.
+### Latest Release (v1.14.0)
+- Fix issues for clone througth API
+- Implement CronJob every 4 hours to refresh token authentication.
+- Update UI for repositories list.
+- Implemente Search on select repositories for improve performance on installation.
 
 [View full changelog](CHANGELOG.md)
 
@@ -112,11 +113,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 Part of the **Juzt Stack** ecosystem:
 > The ecosystem will be published in the coming weeks. Subscribe to our newsletter at [https://www.juztstack.dev](https://www.juztstack.dev)
-<!--
-- [Juzt Studio](link) - Visual template builder for WordPress
-- [Juzt Pulse](link) - JSON-powered theme engine
-- [Juzt CLI](link) - Command-line development tools
--->
+
 
 ## 👤 Author
 

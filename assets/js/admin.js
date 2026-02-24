@@ -238,11 +238,12 @@
       const selectedOption = $(this).find("option:selected");
       const owner = selectedOption.val();
       const type = selectedOption.data("type");
+      const installationId = selectedOption.data("installation");
 
-      debugLog("Selected Organization:", { owner, type });
+      debugLog("Selected Organization:", { owner, type, installationId });
 
       if (owner) {
-        loadRepositories(owner, type);
+        loadRepositories(owner, type, installationId);
         showStep("repository");
       } else {
         hideStep("repository");
@@ -327,6 +328,78 @@
     $("#wpvtp-install-form").on("submit", function (e) {
       e.preventDefault();
       installRepository();
+    });
+
+    $("#wpvtp-repository-search").on("keydown", function ($e) {
+      const enter = $e.key.toLowerCase() === "enter";
+      const value = $e.target.value.trim().toLowerCase();
+      const owner = jQuery("#wpvtp-organization").find(":selected").val();
+      if(value.length === 0 && enter === true){
+        showNotification("Please enter a search term", "error");
+        return false;
+      }
+
+      if(value.length > 0 && value.length < 3 && enter === true){
+        showNotification("Search term must be at least 3 characters long", "error");
+        return false;
+      }
+
+      if (enter) {
+        searchRepositoriesByName(owner, value);
+      }
+    });
+
+    $(".wpvtp-select-all-commits").on("change", selectAllItems);
+    $(".wpvtp-bulk-delete").on("click", bulkDeleteSelectedCommits);
+  }
+
+  function bulkDeleteSelectedCommits(){
+    const selectedItems = [];
+    $(".wpvtp-commit-checkbox:checked").each(function() {
+      selectedItems.push( parseInt($(this).data("id")) );
+    });
+
+    if (selectedItems.length === 0) {
+      showNotification("Please select at least one commit to delete", "error");
+      return;
+    }
+
+    showConfirmModal(
+      "Confirm Deletion",
+      `Are you sure you want to delete ${selectedItems.length} selected commits? This action cannot be undone.`,
+      "Delete",
+      "button-link-delete",
+      function () {
+        console.log(selectedItems);
+        jQuery.post(ajaxurl, {
+          action: 'wpvtp_bulk_delete_commits',
+          nonce: wpvtp_ajax.nonce,
+          commit_ids: JSON.stringify(selectedItems),
+        }, function (response) {
+          if (response.success) {
+            showNotification("✅ Commits deleted successfully", "success");
+            // Reload the table or update UI accordingly
+            location.reload();
+          } else {
+            showNotification("❌ Error deleting commits", "error");
+          }
+        });
+      }
+    );
+  }
+
+  function searchRepositoriesByName(owner, term){
+    jQuery.post(ajaxurl, {
+      action: 'wpvtp_search_repositories_by_name',
+      nonce: wpvtp_ajax.nonce,
+      owner: owner,
+      term: term,
+    }, function (response) { 
+      currentRepositories = response.data.items || [];
+      populateRepositorySelect();
+    }).fail(function(){
+      $("#wpvtp-repository-search").val("");
+      showNotification("❌ Error while searching repositories", "error");
     });
   }
 
@@ -544,7 +617,7 @@
       const label =
         org.login + (org.description ? " - " + org.description : "");
 
-      html += `<option value="${org.login}" data-type="${type}">${icon} ${label}</option>`;
+      html += `<option value="${org.login}" data-installation="${org.installation_id}" data-type="${type}">${icon} ${label}</option>`;
     });
 
     select.html(html);
@@ -554,7 +627,7 @@
   /**
    * Load repositories for an organization
    */
-  function loadRepositories(owner, type) {
+  function loadRepositories(owner, type, installationId) {
     const select = $("#wpvtp-repository");
 
     debugLog("Loading repositories for:", { owner, type });
@@ -564,16 +637,17 @@
       .prop("disabled", true);
 
     $.post(wpvtp_ajax.ajax_url, {
-      action: "wpvtp_get_repositories",
+      action: 'wpvtp_get_repositories_by_installation',
       owner: owner,
       type: type,
+      installation_id: installationId,
       nonce: wpvtp_ajax.nonce,
     })
       .done(function (response) {
         debugLog("Repositories response:", response);
 
         if (response.success) {
-          currentRepositories = response.data;
+          currentRepositories = response.data.repositories || [];
           populateRepositorySelect();
 
           // Count private repos
@@ -609,6 +683,7 @@
    */
   function populateRepositorySelect() {
     const select = $("#wpvtp-repository");
+    const inputSearch = $("#wpvtp-repository-search");
 
     if (currentRepositories.length === 0) {
       select.html('<option value="">No repositories available</option>');
@@ -646,6 +721,8 @@
         "success"
       );
     }
+
+    inputSearch.val("").prop("disabled", false);
 
     debugLog(
       `${currentRepositories.length} repositories loaded (${privateCount} private)`
@@ -1197,6 +1274,12 @@
     if (onOpen) {
       onOpen();
     }
+  }
+
+  function selectAllItems(event){
+    const checked = event.target.checked;
+    $(event.target).closest('table').find('tbody input[type="checkbox"]').prop('checked', checked);
+    $('.wpvtp-bulk-delete').prop('disabled', !checked);
   }
 
   function showConfirmModal(
