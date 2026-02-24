@@ -71,6 +71,7 @@ class WP_Versions_Themes_Plugins
      * Instancia singleton
      */
     private static $instance = null;
+    private $cron_job;
 
     /**
      * Obtener instancia singleton
@@ -126,6 +127,33 @@ class WP_Versions_Themes_Plugins
 
         // Nuevo handler para el callback del middleware
         add_action('admin_init', array($this, 'handle_middleware_callback'));
+
+        add_filter('commit_from_plugin', array($this, 'commit_from_plugin') ,10,4);
+
+        require_once WPVTP_PLUGIN_DIR . 'includes/class-cronjob.php';
+
+        $this->cron_job = new WPVTP_CronJob('every_four_hours', array($this, 'refresh_oauth_token'));
+
+
+    }
+
+    public function refresh_oauth_token()
+    {
+        require_once WPVTP_PLUGIN_DIR . 'includes/class-oauth-service.php';
+        $oauth_service = new WPVTP_OAuth_Service();
+        $oauth_service->refresh_access_token();
+    }
+
+    /**
+     * Add Commit filter
+     */
+
+    public function commit_from_plugin($result, $theme_path, $commit_message, $file_path = null){
+        require_once WPVTP_PLUGIN_DIR . 'includes/class-repo-manager.php';
+        $repo_manager = new WPVTP_Repo_Manager();
+
+        error_log('🔄 from direct plugin called - Stack: ' . wp_debug_backtrace_summary());
+        return $repo_manager->queue_commit($theme_path, $commit_message, $file_path);
     }
 
     /**
@@ -249,12 +277,14 @@ class WP_Versions_Themes_Plugins
      */
     public function handle_middleware_callback()
     {
-        if (!isset($_GET['page']) || $_GET['page'] !== 'wp-versions-themes-plugins' || !isset($_GET['session_token']) || !isset($_GET['refresh_token'])) {
+        //var_dump($_GET); // Debug: Verificar parámetros recibidos
+        if (!isset($_GET['page']) || $_GET['page'] !== 'wp-versions-themes-plugins' || !isset($_GET['access_token']) || !isset($_GET['refresh_token'])) {
             return;
         }
 
+
         try {
-            $session_token = sanitize_text_field($_GET['session_token']);
+            $session_token = sanitize_text_field($_GET['access_token']);
             $refresh_token = sanitize_text_field($_GET['refresh_token']);
             update_option('wpvtp_oauth_token', $session_token);
             update_option('wpvtp_refresh_token', $refresh_token);
@@ -390,6 +420,12 @@ class WP_Versions_Themes_Plugins
             return;
         }
 
+        // ✅ NUEVO: Verificar headers ANTES de session_start
+        if (headers_sent($file, $line)) {
+            error_log("Headers already sent in $file on line $line");
+            return;
+        }
+
         // Si no hay parámetro wpvtheme y no hay sesión activa, salir
         if (!isset($_GET['wpvtheme'])) {
             if (session_status() === PHP_SESSION_NONE) {
@@ -460,9 +496,9 @@ class WP_Versions_Themes_Plugins
         error_log('WPVTP Preview: Aplicando filtros para tema: ' . $theme_handle);
 
         if (!headers_sent()) {
-          header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
-          header('Pragma: no-cache');
-          header('Expires: Thu, 01 Jan 1970 00:00:00 GMT');
+            header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+            header('Pragma: no-cache');
+            header('Expires: Thu, 01 Jan 1970 00:00:00 GMT');
         }
 
         // Aplicar filtros con prioridad muy alta para que se ejecuten antes
@@ -489,6 +525,9 @@ class WP_Versions_Themes_Plugins
      */
     public function add_preview_bar()
     {
+        if (isset($_GET['from_studio'])) {
+            return;
+        }
 
         if (!isset($_SESSION['wpvtp_preview_theme'])) {
             return;
@@ -611,7 +650,9 @@ wpvtp_init();
 // Mejorar el sistema de preview de temas
 add_action('init', function () {
     if (session_status() === PHP_SESSION_NONE) {
+        if (headers_sent($file, $line)) {
         session_start();
+        }
     }
 
     // Mantener preview en navegación solo si no hay parámetro wpvtheme

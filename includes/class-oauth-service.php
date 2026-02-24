@@ -20,7 +20,8 @@ class WPVTP_OAuth_Service
     /**
      * URL del servicio middleware
      */
-    const OAUTH_SERVICE_URL = 'https://local.juztstack.dev/juztdeploy';
+    //const OAUTH_SERVICE_URL = 'https://local.juztstack.dev/juztdeploy';
+    const OAUTH_SERVICE_URL = 'https://hub.juztstack.dev/juztdeploy';
     const GITHUB_API_URL = 'https://api.github.com';
 
     /**
