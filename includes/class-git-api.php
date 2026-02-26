@@ -234,8 +234,25 @@ class JUZT_DEPLOY_BASIC_Git_API extends JUZT_DEPLOY_BASIC_Git_Interface
     $repo = $metadata['repo'];
     $branch = $metadata['branch'];
 
-    // Convertir path absoluto a relativo
+    // ✅ Normalizar paths (sin trailing slash)
+    $repo_path = rtrim($repo_path, '/');
+    $file_path = rtrim($file_path, '/');
+
+    // ✅ Convertir a path relativo
     $relative_path = str_replace($repo_path . '/', '', $file_path);
+
+    // ✅ IMPORTANTE: Quitar slash inicial si existe
+    $relative_path = ltrim($relative_path, '/');
+
+    // ✅ Debug (eliminar en producción)
+    error_log('Repo path: ' . $repo_path);
+    error_log('File path: ' . $file_path);
+    error_log('Relative path: ' . $relative_path);
+
+    // Verificar que el path relativo no esté vacío
+    if (empty($relative_path)) {
+      return array('success' => false, 'error' => 'Invalid relative path');
+    }
 
     // 1. Obtener SHA actual del archivo
     $get_url = "https://api.github.com/repos/{$owner}/{$repo}/contents/{$relative_path}?ref={$branch}";
@@ -243,7 +260,8 @@ class JUZT_DEPLOY_BASIC_Git_API extends JUZT_DEPLOY_BASIC_Git_Interface
     $get_response = wp_remote_get($get_url, array(
       'headers' => array(
         'Authorization' => 'Bearer ' . $access_token,
-        'Accept' => 'application/vnd.github+json'
+        'Accept' => 'application/vnd.github+json',
+        'User-Agent' => 'WordPress-Plugin'
       )
     ));
 
@@ -254,19 +272,14 @@ class JUZT_DEPLOY_BASIC_Git_API extends JUZT_DEPLOY_BASIC_Git_Interface
     }
 
     // 2. Leer contenido del archivo
-    // Asegurar que sea ruta absoluta
-    $absolute_file_path = (strpos($file_path, $repo_path) === 0)
-      ? $file_path
-      : $repo_path . '/' . ltrim($file_path, '/');
-
-    if (!file_exists($absolute_file_path)) {
+    if (!file_exists($file_path)) {
       return array(
         'success' => false,
-        'error' => 'File not found: ' . $absolute_file_path
+        'error' => 'File not found: ' . $file_path
       );
     }
 
-    $content = file_get_contents($absolute_file_path);
+    $content = file_get_contents($file_path);
     $content_base64 = base64_encode($content);
 
     // 3. Commit vía API
@@ -287,7 +300,8 @@ class JUZT_DEPLOY_BASIC_Git_API extends JUZT_DEPLOY_BASIC_Git_Interface
       'headers' => array(
         'Authorization' => 'Bearer ' . $access_token,
         'Accept' => 'application/vnd.github+json',
-        'Content-Type' => 'application/json'
+        'Content-Type' => 'application/json',
+        'User-Agent' => 'WordPress-Plugin'
       ),
       'body' => json_encode($payload)
     ));
@@ -297,13 +311,20 @@ class JUZT_DEPLOY_BASIC_Git_API extends JUZT_DEPLOY_BASIC_Git_Interface
     }
 
     $status_code = wp_remote_retrieve_response_code($put_response);
+    $response_body = json_decode(wp_remote_retrieve_body($put_response), true);
 
     if ($status_code < 200 || $status_code >= 300) {
-      $body = json_decode(wp_remote_retrieve_body($put_response), true);
-      return array('success' => false, 'error' => isset($body['message']) ? $body['message'] : 'Commit failed');
+      return array(
+        'success' => false,
+        'error' => isset($response_body['message']) ? $response_body['message'] : 'Commit failed',
+        'details' => $response_body // ✅ Más info para debug
+      );
     }
 
-    return array('success' => true);
+    return array(
+      'success' => true,
+      'commit' => $response_body
+    );
   }
 
   private function save_repo_metadata($repo_path, $owner, $repo, $branch)

@@ -969,16 +969,20 @@ class JUZT_DEPLOY_BASIC_Repo_Manager
         global $wpdb;
         $table_name = $wpdb->prefix . 'JUZT_DEPLOY_BASIC_commits_queue';
 
+        $insert_data = array(
+            'theme_path' => $theme_path,
+            'commit_message' => $commit_message,
+            'file_path' => $file_path,
+            'status' => 'pending',
+            'attempts' => 0,
+            'created_at' => current_time('mysql')
+        );
+
+        error_log('Encolando commit: ' . print_r($insert_data, true));
+
         $inserted = $wpdb->insert(
             $table_name,
-            array(
-                'theme_path' => $theme_path,
-                'commit_message' => $commit_message,
-                'file_path' => $file_path,
-                'status' => 'pending',
-                'attempts' => 0,
-                'created_at' => current_time('mysql')
-            ),
+            $insert_data,
             array('%s', '%s', '%s', '%s', '%d', '%s')
         );
 
@@ -987,10 +991,18 @@ class JUZT_DEPLOY_BASIC_Repo_Manager
 
             $this->process_commit_queue_item($commit_id);
 
-            return array(
+            $response = array(
                 'success' => true,
-                'commit_id' => $commit_id
+                'commit_id' => $commit_id,
             );
+
+            return array_merge($response, array(
+                'theme_path' => $theme_path,
+                'commit_message' => $commit_message,
+                'file_path' => $file_path,
+                'attempts' => 0,
+                'created_at' => current_time('mysql')
+            ));
         }
 
         return array(

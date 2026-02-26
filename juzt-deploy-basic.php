@@ -160,6 +160,7 @@ class WP_Versions_Themes_Plugins
         $repo_manager = new JUZT_DEPLOY_BASIC_Repo_Manager();
 
         error_log('🔄 from direct plugin called - Stack: ' . wp_debug_backtrace_summary());
+        error_log('🔄 from direct plugin called - theme_path: ' . $file_path);
         return $repo_manager->queue_commit($theme_path, $commit_message, $file_path);
     }
 
