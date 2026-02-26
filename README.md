@@ -4,7 +4,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![WordPress](https://img.shields.io/badge/WordPress-5.8+-blue.svg)](https://wordpress.org/)
-[![Version](https://img.shields.io/badge/version-1.14.0-green.svg)](https://github.com/tu-usuario/juzt-deploy/releases)
+[![Version](https://img.shields.io/badge/version-1.16.0-green.svg)](https://github.com/tu-usuario/juzt-deploy/releases)
 
 ## 📋 Overview
 
@@ -33,7 +33,7 @@ Part of the **Juzt Stack** ecosystem - a comprehensive WordPress development too
 ### Steps
 
 1. Download the latest release
-2. Upload to `/wp-content/plugins/juzt-deploy`
+2. Upload to `/wp-content/plugins/juzt-deploy-basic`
 3. Activate the plugin
 4. Navigate to **Juzt Deploy** → **Settings**
 5. Connect your GitHub account
@@ -125,7 +125,7 @@ Part of the **Juzt Stack** ecosystem:
 ## 💬 Support
 
 - 📧 Email: info@juztstack.dev
-- 💼 Issues: [GitHub Issues](https://github.com/juztstack/juzt-deploy-basic-version/issues)
+- 💼 Issues: [GitHub Issues](https://github.com/juztstack/juzt-deploy-basic/issues)
 - 📖 Documentation: [Full Documentation](https://juztstack.dev/docs)
 
 ---
