@@ -47,7 +47,7 @@ class JUZT_DEPLOY_BASIC_Admin_Interface
         $this->current_page = isset($_GET['tab']) ? sanitize_text_field($_GET['tab']) : 'dashboard';
 
         echo '<div class="wrap wpvtp-admin" style="max-width: 1024px; margin: 20px 15px 20px 0px;">';
-        echo '<h1 style="font-size: 42px; font-weight: 700;">Juzt Deploy - Basic version</h1>';
+        echo '<h1 style="font-size: 42px; font-weight: 700;">Juzt Deploy - Basic version - v1.17.0</h1>';
         echo '<p>A fast way to deploy themes and plugins from Github to Wordpress site.</p>';
         echo '<p>Created by <a href="https://github.com/jesusuzcategui" target="_blank">Jesus Uzcategui</a> and <a href="https://juztstack.com" target="_blank">Juzt Stack Project</a>.</p>';
 
